@@ -2,17 +2,40 @@ import numpy as np
 from MLP import MLP
 import time as t
 
+np.random.seed(100)
+
 class bot():
     def __init__(self):
-        self.brain = MLP(64,1,"n",5)
+        self.brain = MLP(64,1,"n",4, [16,12,4])
         self.BOARD_SIZE = 8
         self.is_player = 1 # 1 coresponds to being white player, change to -1 for black
+        self.exploration_const = 1 # is used for MCTS algorithm, specificaly the UCB1 function
     
     def read_board(self,board):
         board = np.char.replace(board, " ", "1")
         board = np.char.replace(board, "X", "0")
         board = np.char.replace(board, "O", "2")
         return np.int8(board) - np.ones((self.BOARD_SIZE,self.BOARD_SIZE), dtype = np.int8)
+
+    def evaluate_board(self,board):
+        return self.brain.propigate_withought_softmax(self.read_board(board).flatten())
+
+    def make_eval_move(self,board, player, row, col):
+        """Place a piece and flip opponent pieces."""
+        opponent = 1 if player == -1 else -1
+        directions = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]
+        board[row][col] = player
+
+        for dr, dc in directions:
+            tiles_to_flip = []
+            nr, nc = row + dr, col + dc
+            while 0 <= nr < self.BOARD_SIZE and 0 <= nc < self.BOARD_SIZE and board[nr][nc] == opponent:
+                tiles_to_flip.append((nr, nc))
+                nr += dr
+                nc += dc
+            if 0 <= nr < self.BOARD_SIZE and 0 <= nc < self.BOARD_SIZE and board[nr][nc] == player:
+                for rr, cc in tiles_to_flip:
+                    board[rr][cc] = player
 
     def evaluate_moves(self,board,player):
         """Return all valid moves for the player."""
@@ -36,12 +59,12 @@ class bot():
                         break
         moves = moves[1:]
         
-        scores = np.array(moves,dtype=np.ndarray)
+        scores = np.array(moves,dtype=np.ndarray) # probably a better way of doing this like incorporating it into the main loop
         for i in range(len(moves)):
             temp_board = np.array(board)
-            temp_board[moves[i][0]][moves[i][1]] = player
+            self.make_eval_move(temp_board, player, moves[i][0], moves[i][1]) # fixed the probelm of all the temp_boards being the same, the net eval has some other issue here > problem was with matrix decleration in the MLP has been fixed now
+            #scores[i] = np.sum(temp_board.flatten())
             scores[i] = self.brain.propigate_withought_softmax(temp_board.flatten())
-        
         return moves[np.argmax(scores.transpose() * player)] # the *player bit is to acount for the negative values coresponding to black
     
     def play_training_game(self):
@@ -62,10 +85,11 @@ class bot():
                 continue
 
             # make moves
-            if np.random.randint(0,3) == 0: # the partialy random action is to alow the bot to see more game posibilities in training
+            if np.random.randint(0,5) < 2: # the partialy random action is to alow the bot to see more game posibilities in training
                 move = moves[np.random.randint(0,len(moves))]
             else:
                 move = self.evaluate_moves(self.read_board(board),player_idx)
+
             self.make_move(board, current_player,move[0],move[1])
 
             # change player
@@ -74,13 +98,134 @@ class bot():
 
             game = np.concat((game, [self.read_board(board)]), axis = 0)
         
-        game = game[1:]
+        game = game[3:]
         totalx, totalo = self.score(board)
 
         winner = totalo - totalx # signed diference is a good predictor of who is winning in the end
         
         for turn in game:
             self.brain.back_propigate_once_root_mean_squared_Adam(np.array(turn).flatten(),[winner])
+
+    # functions to create and run a game tree when the bot is playing a game
+    def play_tree_game(self, Board, current_player): # runs a random search for the tree, use this to train the bot
+        player_idx = -1 if current_player == 'X' else 1
+        search_width = 8 # how many boards are considered at once
+        duplication_rate = 2 # how many boards get created from a previous board
+        boards = np.array([np.array(Board)], dtype = np.ndarray) # boards are text based here
+        move_set = np.array([[-1,-1]], dtype=np.ndarray)
+        move_tree = np.array([[0,0]], dtype=np.ndarray)
+        game_finnished = False
+        
+
+        while not game_finnished:
+            new_boards = np.array([np.zeros((self.BOARD_SIZE,self.BOARD_SIZE))])
+            num_moves = len(move_set)
+            for i in range(len(boards)): # progress search tree for each board stored
+                moves = self.valid_moves(boards[i], current_player)
+                if not moves:
+                    if not self.valid_moves(boards[i], 'O' if current_player == 'X' else 'X'): # stop game if no moves can be made by anyone
+                        game_finnished = True
+                    new_boards = np.concat((new_boards,[boards[i]]), axis = 0)
+                    continue # skips a board that has no playable moves
+                np.random.shuffle(moves)
+                moves = moves[:duplication_rate]
+                connections = np.array([[num_moves-len(boards) + i, len(move_set) + ii] for ii in range(min(duplication_rate, len(moves)))]) # first element is move index from and second element is move index too in the move_set array
+                move_set = np.concat((move_set,moves), axis = 0)
+                move_tree = np.concat((move_tree,connections), axis = 0)
+                add_boards = np.array([boards[i] for _ in range(min(duplication_rate, len(moves)))])
+                for ii in range(min(duplication_rate, len(moves))):
+                    self.make_move(add_boards[ii],current_player,moves[ii][0],moves[ii][1])
+                new_boards = np.concat((new_boards, add_boards), axis = 0)
+
+            boards = np.array(new_boards[max(len(new_boards) - search_width,1):])
+
+            # change player
+            player_idx = 1 if player_idx == -1 else -1
+            current_player = 'O' if current_player == 'X' else 'X'
+
+
+    def game_tree(self):
+        pass
+
+
+    # monte carlo tree search
+
+    def UCB1(self, total_val, number_visits, number_parent_visits): # is used in the MCTS algorithm for cell evaluation
+        return (total_val/number_visits) + (self.exploration_const*np.sqrt(np.log(number_parent_visits)/number_visits))
+
+    class node(): # probably should replace later with parralel arrays but use this for now to get it working
+        def __init__(self, total_val:np.float64, number_visits:np.int64, parent_node_idx:np.int64, node_idx:np.int64, board:np.ndarray, player:np.int64):
+            self.total_val = total_val
+            self.number_visits = number_visits
+            self.parent_node_idx = parent_node_idx
+            self.node_idx = node_idx # this is probably unnesasery but ill remove it later if its an issue
+            self.child_node_idxs = []
+            self.is_terminal_node = False # if this turns out to be true the value should be adjusted in the simulation step, dont know if this is standard but its what im doing
+            self.node_board = board
+            self.node_player = player
+
+
+    def MCTS(self, board, player, iters):
+        #initalisation
+        inital_node_val = 0 # to be honest im prety sure this value does nothing
+        nodes = [self.node(inital_node_val, 0, -1, 0, board, player)]
+
+        for i in range(iters):
+            #selection
+            keep_selecting = True
+            selection_idx = 0 # could change the selecion index as moves get made to be able to cut parts of the search tree out
+            while keep_selecting:
+                childeren = nodes[selection_idx].child_node_idxs
+                parent_visits = nodes[selection_idx].number_visits
+                if len(childeren) == 0:
+                    keep_selecting = False
+                else:
+                    child_vals = np.array([0]*len(childeren))
+                    for i in range(len(childeren)):
+                        child = nodes[childeren[i]]
+                        if child.number_visits == 0: # exists to prevent division by 0 in the UCB1 value calcs as if a node hasent been viseted it must be prioratised over nodes that have
+                            selection_idx = child.node_idx # this method doesnt randomise the selection for unvisited nodes so could be improved in future
+                            keep_selecting = False
+                            break
+                        else:
+                            child_vals[i] = self.UCB1(child.total_val, child.number_visits, parent_visits)
+                    
+                    if keep_selecting:
+                        selection_idx = childeren[np.argmax(child_vals)]
+                        while nodes[selection_idx].is_terminal_node:
+                            child_vals[np.argmax(child_vals)] = 0
+                            selection_idx = childeren[np.argmax(child_vals)]
+
+            #expansion
+            if not nodes[selection_idx].is_terminal_node:
+                player_chr = "O" if nodes[selection_idx].node_player == -1 else "X"
+                new_moves = self.valid_moves(nodes[selection_idx].node_board, player_chr)
+                if len(new_moves) == 0:
+                    nodes[selection_idx].is_terminal_node = True
+                else:
+                    current_player_chr = "O" if nodes[selection_idx].node_player == -1 else "X"
+                    current_player = 1 if nodes[selection_idx].node_player == -1 else -1
+                    for i in range(len(new_moves)):
+                        init_board = np.array(nodes[selection_idx].node_board)
+                        self.make_move(init_board, current_player_chr, new_moves[i][0], new_moves[i][1])
+                        nodes.append(self.node(0, 0, selection_idx, len(nodes), init_board, current_player))
+                        nodes[selection_idx].child_node_idxs.append(len(nodes)-1)
+                    
+                    sim_node_idx = np.random.randint(len(nodes) - len(new_moves), len(nodes)) # this will be the node that we simulae the oucome of in the next step
+
+                    #simulation
+                    nodes[sim_node_idx].total_val = self.evaluate_board(nodes[sim_node_idx].node_board)[0] # evaluation using neural nets to be quick, a more expensive sim could be done maybey repurpouse the play game tree function for this
+
+                    #backpropigation
+                    back_prop_idx = nodes[sim_node_idx].parent_node_idx
+                    while back_prop_idx != -1:
+                        nodes[back_prop_idx].total_val += nodes[sim_node_idx].total_val
+                        nodes[back_prop_idx].number_visits += 1
+                        back_prop_idx = nodes[back_prop_idx].parent_node_idx
+
+        return nodes
+    
+
 
     # Othello (Reversi) - Console Version
     # Two-player version (Black = X, White = O) Black = -1 White = 1, black gets index 0 white gets index 1
@@ -96,10 +241,9 @@ class bot():
 
     def print_board(self,board):
         """Display the board."""
-        print("  " + " ".join(str(i) for i in range(self.BOARD_SIZE)))
+        print("    " + "   ".join(str(i) for i in range(self.BOARD_SIZE)))
         for i, row in enumerate(board):
-            print(i, " ".join(str(row)))
-        print()
+            print(i, str(row))
 
     def valid_moves(self,board, player):
         """Return all valid moves for the player."""
@@ -119,7 +263,7 @@ class bot():
                         nc += dc
                         found_opponent = True
                     if found_opponent and 0 <= nr < self.BOARD_SIZE and 0 <= nc < self.BOARD_SIZE and board[nr][nc] == player:
-                        moves.append((r, c))
+                        moves.append([r, c])
                         break
         return moves
 
@@ -166,7 +310,7 @@ class bot():
                 self.print_board(board)
                 x_count, o_count = self.score(board)
                 print(f"Score → X: {x_count}, O: {o_count}")
-                print(f"{current_player}'s turn")
+                print(f"{current_player}'s turn| prediction: {self.evaluate_board(board)[0]}")
 
 
                 print("Valid moves:", moves)
@@ -201,10 +345,25 @@ class bot():
 
 test = bot()
 start = t.time()
-for i in range(500): # trains bot, first games seem to indicate that its pretty good or your realy bad. either way it seems to actualy play the game
+for i in range(5): # trains bot, it seems a bit monsterous or your horrible at othello. its verry good early and mid game but gets pretty bad late game, was winning most of your game
     test.play_training_game()
 end = t.time()
-print(end - start)
+print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
 print()
-test.main()
 
+#test.play_tree_game(test.create_board(),'X')
+#test.main()
+
+start = t.time()
+network = test.MCTS(test.create_board(),-1, 4*384) # runs in about 0.4 seconds so very quick
+end = t.time()
+
+for i in range(min(len(network),32)):
+    print(network[i].node_board)
+    print(network[i].child_node_idxs)
+    print(network[i].total_val)
+    print(network[i].number_visits)
+    print()
+
+print(len(network))
+print(end - start)

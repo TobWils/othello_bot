@@ -5,8 +5,10 @@ import time
 # location of traning data => C:/Users/twilson763/OneDrive - Glow Scotland/projects/python/percep/ai learns to read training data.csv
 # location on mac: /Users/toby/Library/CloudStorage/OneDrive-GlowScotland/projects/python/percep/ai learns to read training data.csv
 
+np.random.seed(100)
+
 class MLP():
-    def __init__(self,start_layer: int,end_layer: int,location: str,hidden_layers: int):
+    def __init__(self,start_layer: int,end_layer: int,location: str,hidden_layers: int, layer_sizes: np.ndarray):
         self.total = 0
         self.location = location
         self.layers: int = hidden_layers
@@ -29,12 +31,12 @@ class MLP():
                 m = end_layer
             else:
                 #m = int(input('enter neurons in hidden layer ' + str(i+1) + ': '))
-                m = 16 # the inputing of neurons has been removed here for conveniance though it could be returned
+                m = layer_sizes[i] # alowes for the net shape to be given at net decleration, must give an array of size = hidden_layers - 1
             self.hidden_layers[i] = np.multiply(np.random.rand(m,n),0.5)-0.2
             self.biases[i] = np.multiply(np.random.rand(m),0.5)-0.2
-            if i == 0 or i == 1:
-                self.hidden_layers[i] = np.ones((m,n))
-                self.biases[i] = np.random.rand(m)*100 - 200
+            #if i == 0 or i == 1: # do not do this again it completely wrecks the nets eval capability
+            #    self.hidden_layers[i] = np.ones((m,n))
+            #    self.biases[i] = np.random.rand(m)*100 - 200
             self.neurons[i+1]: np.ndarray = [0 for i in range(m)]
             self.num_neurons[i+1]: int = m
             self.total += m

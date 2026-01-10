@@ -1,1 +1,2 @@
-this is just a repo to store the MLP code i will use in other projects in a way that i can change and update easily
+this is a repo for my othello bot to store all the relavent files and have a virtual environment with the dependancies clearly listed
+i forgot to update this file untill recently so erlier versions will still say its just for the MLP code
