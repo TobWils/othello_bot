@@ -25,31 +25,8 @@ class bot():
             self.brain.read_bias(i, bias_location)
             self.brain.read_matrix(i, weight_location)
 
-    def read_board(self,board):
-        board = np.char.replace(board, " ", "1")
-        board = np.char.replace(board, "X", "0")
-        board = np.char.replace(board, "O", "2")
-        return np.int8(board) - np.ones((self.BOARD_SIZE,self.BOARD_SIZE), dtype = np.int8)
-
     def evaluate_board(self,board):
-        return self.brain.propigate_withought_softmax(self.read_board(board).flatten())
-
-    def make_eval_move(self,board, player, row, col):
-        """Place a piece and flip opponent pieces."""
-        opponent = 1 if player == -1 else -1
-        directions = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]
-        board[row][col] = player
-
-        for dr, dc in directions:
-            tiles_to_flip = []
-            nr, nc = row + dr, col + dc
-            while 0 <= nr < self.BOARD_SIZE and 0 <= nc < self.BOARD_SIZE and board[nr][nc] == opponent:
-                tiles_to_flip.append((nr, nc))
-                nr += dr
-                nc += dc
-            if 0 <= nr < self.BOARD_SIZE and 0 <= nc < self.BOARD_SIZE and board[nr][nc] == player:
-                for rr, cc in tiles_to_flip:
-                    board[rr][cc] = player
+        return self.brain.propigate_withought_softmax(board.flatten())
 
     def evaluate_moves(self, board, player, eval_mode:str):
         if eval_mode == "neural_net":
@@ -78,7 +55,7 @@ class bot():
             
             for i in range(len(moves)):
                 temp_board = np.array(board)
-                self.make_eval_move(temp_board, player, moves[i][0], moves[i][1]) # fixed the probelm of all the temp_boards being the same, the net eval has some other issue here > problem was with matrix decleration in the MLP has been fixed now
+                self.make_move(temp_board, player, moves[i][0], moves[i][1]) # fixed the probelm of all the temp_boards being the same, the net eval has some other issue here > problem was with matrix decleration in the MLP has been fixed now
                 #scores[i] = np.sum(temp_board.flatten())
                 scores[i] = self.brain.propigate_withought_softmax(temp_board.flatten())
 
@@ -104,19 +81,17 @@ class bot():
 
     def play_training_game(self):
         board = self.create_board()
-        current_player = 'X'
         player_idx = -1
-        game = [self.read_board(board)]
+        game = [np.array(board)]
 
         while True:
             # check if moves can be made
-            moves = self.valid_moves(board, current_player)
+            moves = self.valid_moves(board, player_idx)
 
             if not moves:
-                if not self.valid_moves(board, 'O' if current_player == 'X' else 'X'): # stop game if no moves can be made by anyone
+                if not self.valid_moves(board, -player_idx): # stop game if no moves can be made by anyone
                     break
-                current_player = 'O' if current_player == 'X' else 'X'
-                player_idx = 1 if current_player == 'O' else -1
+                player_idx = -player_idx
                 continue
 
             # make moves
@@ -124,39 +99,36 @@ class bot():
                 if np.random.randint(0,5) < 3: # the partialy random action is to alow the bot to see more game posibilities in training
                     move = moves[np.random.randint(0,len(moves))]
                 else:
-                    move = self.evaluate_moves(self.read_board(board), player_idx, "neural_net")
+                    move = self.evaluate_moves(np.array(board), player_idx, "neural_net")
 
-                self.make_move(board, current_player,move[0],move[1])
+                self.make_move(board, player_idx,move[0],move[1])
             else:
                 board = self.evaluate_moves(board, player_idx, "MCTS_neural_net")
 
             # change player
-            current_player = 'O' if current_player == 'X' else 'X'
-            player_idx = 1 if current_player == 'O' else -1
+            player_idx = -player_idx
 
-            game.append(self.read_board(board))
+            game.append(np.array(board))
         
         #game = game[3:]
-        totalx, totalo = self.score(board)
-
-        winner = totalo - totalx # signed diference is a good predictor of who is winning in the end
+        winner = np.sum(board.flatten(), dtype= np.float64) # signed diference is a good predictor of who is winning in the end
         
         for turn in game:
-            self.brain.back_propigate_once_root_mean_squared_Adam(np.array(turn).flatten(),[winner])
+            self.brain.back_propigate_once_root_mean_squared_Adam(np.astype(turn, np.float64).flatten(),[winner])
 
     # monte carlo tree search
 
     def play_tree_game(self, Board, current_player): # runs a random search for the MCTS
-        board = np.array(Board)
+        board = np.astype(Board, np.int8)
 
         while True:
             # check if moves can be made
             moves = self.valid_moves(board, current_player)
 
             if not moves:
-                if not self.valid_moves(board, 'O' if current_player == 'X' else 'X'): # stop game if no moves can be made by anyone
+                if not self.valid_moves(board, -current_player): # stop game if no moves can be made by anyone
                     break
-                current_player = 'O' if current_player == 'X' else 'X'
+                current_player = -current_player
                 continue
 
             # make random moves to see how the game finnishes
@@ -164,11 +136,9 @@ class bot():
             self.make_move(board, current_player,move[0],move[1])
 
             # change player
-            current_player = 'O' if current_player == 'X' else 'X'
-        
-        totalx, totalo = self.score(board)
+            current_player = -current_player
 
-        return totalo - totalx # signed diference is a good predictor of who is winning in the end
+        return np.sum(board.flatten()) # signed diference is a good predictor of who is winning in the end
 
     def UCB1(self, total_val, number_visits, number_parent_visits): # is used in the MCTS algorithm for cell evaluation
         return (total_val/number_visits) + (self.exploration_const*np.sqrt(np.log(number_parent_visits)/number_visits))
@@ -224,15 +194,15 @@ class bot():
 
             #expansion
             if not nodes[selection_idx].is_terminal_node:
-                current_player_chr = "X" if nodes[selection_idx].node_player == -1 else "O"
-                new_moves = self.valid_moves(nodes[selection_idx].node_board, current_player_chr)
+                #current_player_chr = "X" if nodes[selection_idx].node_player == -1 else "O"
+                new_moves = self.valid_moves(nodes[selection_idx].node_board, nodes[selection_idx].node_player)
                 if not new_moves:
                     nodes[selection_idx].is_terminal_node = True
                 else:
-                    current_player = 1 if nodes[selection_idx].node_player == -1 else -1
+                    current_player = -nodes[selection_idx].node_player
                     for i in range(len(new_moves)):
                         init_board = np.array(nodes[selection_idx].node_board)
-                        self.make_move(init_board, current_player_chr, new_moves[i][0], new_moves[i][1])
+                        self.make_move(init_board, -current_player, new_moves[i][0], new_moves[i][1])
                         nodes.append(self.node(0, 0, selection_idx, len(nodes), init_board, current_player))
                         nodes[selection_idx].child_node_idxs.append(len(nodes)-1)
                     
@@ -242,8 +212,8 @@ class bot():
                     if simulation_mode == "neural_net":
                         nodes[sim_node_idx].total_val = self.evaluate_board(nodes[sim_node_idx].node_board)[0] # evaluation using neural nets to be quick, a more expensive sim could be done maybey repurpouse the play game tree function for this
                     elif simulation_mode == "play_random_game":
-                        current_player_chr = "O" if current_player_chr == "X" else "X"
-                        nodes[sim_node_idx].total_val = self.play_tree_game(nodes[sim_node_idx].node_board, current_player_chr) # evaluation using random game, should be relativly fast and is more acurate
+                        #current_player_chr = "O" if current_player_chr == "X" else "X"
+                        nodes[sim_node_idx].total_val = self.play_tree_game(nodes[sim_node_idx].node_board, current_player) # evaluation using random game, should be relativly fast and is more acurate
 
                     #backpropigation
                     back_prop_idx = nodes[sim_node_idx].parent_node_idx
@@ -259,29 +229,33 @@ class bot():
     # Two-player version (Black = X, White = O) Black = -1 White = 1, black gets index 0 white gets index 1
 
     def create_board(self):
-        board: np.ndarray = np.array([[' 'for _ in range(self.BOARD_SIZE)]for _ in range(self.BOARD_SIZE)])
+        board: np.ndarray = np.array([[ 0 for _ in range(self.BOARD_SIZE)]for _ in range(self.BOARD_SIZE)])
         mid = self.BOARD_SIZE // 2
-        board[mid - 1][mid - 1] = "O"
-        board[mid][mid] = "O"
-        board[mid - 1][mid] = "X"
-        board[mid][mid - 1] = "X"
+        board[mid - 1][mid - 1] = 1
+        board[mid][mid] = 1
+        board[mid - 1][mid] = -1
+        board[mid][mid - 1] = -1
         return board
 
     def print_board(self,board):
         """Display the board."""
+        board = np.array(board, dtype= str)
+        board = np.char.replace(board, "0", " ")
+        board = np.char.replace(board, "-1", "X")
+        board = np.char.replace(board, "1", "O")
         print("    " + "   ".join(str(i) for i in range(self.BOARD_SIZE)))
         for i, row in enumerate(board):
             print(i, str(row))
 
     def valid_moves(self,board, player):
         """Return all valid moves for the player."""
-        opponent = 'O' if player == 'X' else 'X'
+        opponent = -player
         directions = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]
         moves = []
 
         for r in range(self.BOARD_SIZE):
             for c in range(self.BOARD_SIZE):
-                if board[r][c] != ' ':
+                if board[r][c] != 0:
                     continue
                 for dr, dc in directions:
                     nr, nc = r + dr, c + dc
@@ -297,7 +271,7 @@ class bot():
 
     def make_move(self, board:np.ndarray, player, row, col):
         """Place a piece and flip opponent pieces."""
-        opponent = 'O' if player == 'X' else 'X'
+        opponent = 1 if player == -1 else -1
         directions = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]
         board[row][col] = player
 
@@ -314,31 +288,35 @@ class bot():
 
     def score(self,board):
         """Return the count of X and O."""
+        board = np.array(board, dtype= str)
+        board = np.char.replace(board, "0", " ")
+        board = np.char.replace(board, "-1", "X")
+        board = np.char.replace(board, "1", "O")
         x = np.sum(np.strings.count(board,"X"))
         o = np.sum(np.strings.count(board,"O"))
         return x, o
 
     def main(self):
         board = self.create_board()
-        current_player = 'X'
+        #current_player = 'X'
         player_idx = -1
 
         while True:
-            moves = self.valid_moves(board, current_player)
+            moves = self.valid_moves(board, player_idx)
 
             if not moves:
-                if not self.valid_moves(board, 'O' if current_player == 'X' else 'X'):
+                if not self.valid_moves(board, -player_idx):
                         break
                 print("No valid moves, skipping turn.\n")
-                current_player = 'O' if current_player == 'X' else 'X'
-                player_idx = 1 if current_player == 'O' else -1
+                #current_player = 'O' if current_player == 'X' else 'X'
+                player_idx = -player_idx
                 continue
 
             if player_idx != self.is_player:
                 self.print_board(board)
                 x_count, o_count = self.score(board)
                 print(f"Score → X: {x_count}, O: {o_count}")
-                print(f"{current_player}'s turn| prediction: {self.evaluate_board(board)[0]}")
+                print(f"{ 'X' if player_idx == -1 else 'O' }'s turn| prediction: {self.evaluate_board(board)[0]}")
 
 
                 print("Valid moves:", moves)
@@ -351,13 +329,13 @@ class bot():
                     print("Invalid input. Use two numbers like '2 3'.\n")
                     continue
 
-                self.make_move(board, current_player, row, col)
+                self.make_move(board, player_idx, row, col)
 
-            elif player_idx == self.is_player: # plays both, aparent problems with white are just the bot playing as intended
+            elif player_idx == self.is_player:
                 board = self.evaluate_moves(board, self.is_player, "MCTS_random")
 
-            current_player = 'O' if current_player == 'X' else 'X'
-            player_idx = 1 if current_player == 'O' else -1
+            #current_player = 'O' if current_player == 'X' else 'X'
+            player_idx = -player_idx
 
         self.print_board(board)
         x_count, o_count = self.score(board)
@@ -384,7 +362,7 @@ if train_bot: # probably add something to cut out files that aren't needed
     print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
     print()
 
-    #test.save_brains()
+    test.save_brains()
 else:
     test.read_brains()
 
