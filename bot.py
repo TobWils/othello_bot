@@ -80,16 +80,19 @@ class bot():
             return move_nodes[np.argmax(scores)].node_board
 
     def play_training_game(self):
-        board = self.create_board()
+        #board = self.create_board()
         player_idx = -1
-        game = [np.array(board)]
+        #game = [np.array(board)]
+        game = np.zeros((61,8,8), dtype=np.float64)
+        game[0] = self.create_board()
+        i = 0
 
         while True:
             # check if moves can be made
-            moves = self.valid_moves(board, player_idx)
+            moves = self.valid_moves(game[i], player_idx)
 
             if not moves:
-                if not self.valid_moves(board, -player_idx): # stop game if no moves can be made by anyone
+                if not self.valid_moves(game[i], -player_idx): # stop game if no moves can be made by anyone
                     break
                 player_idx = -player_idx
                 continue
@@ -99,22 +102,27 @@ class bot():
                 if np.random.randint(0,5) < 3: # the partialy random action is to alow the bot to see more game posibilities in training
                     move = moves[np.random.randint(0,len(moves))]
                 else:
-                    move = self.evaluate_moves(np.array(board), player_idx, "neural_net")
+                    move = self.evaluate_moves(np.copy(game[i]), player_idx, "neural_net")
 
+                board = np.copy(game[i])
                 self.make_move(board, player_idx,move[0],move[1])
+                game[i+1] = np.copy(board)
+                
             else:
-                board = self.evaluate_moves(board, player_idx, "MCTS_neural_net")
+                game[i+1] = self.evaluate_moves(game[i], player_idx, "MCTS_neural_net")
 
             # change player
             player_idx = -player_idx
 
-            game.append(np.array(board))
+            #game.append(np.array(board))
+            i += 1
         
         #game = game[3:]
-        winner = np.sum(board.flatten(), dtype= np.float64) # signed diference is a good predictor of who is winning in the end
+        winner = np.sum(np.copy(game[i]).flatten()) # signed diference is a good predictor of who is winning in the end
         
-        for turn in game:
-            self.brain.back_propigate_once_root_mean_squared_Adam(np.astype(turn, np.float64).flatten(),[winner])
+        #for turn in game:
+        for n in range(i):
+            self.brain.back_propigate_once_root_mean_squared_Adam(np.copy(game[n]).flatten(),[winner])
 
     # monte carlo tree search
 
@@ -224,12 +232,14 @@ class bot():
 
         return nodes
     
+    def MCTS_train(self, tree_iters):
+        pass #tree = self.MCTS(self.create_board(), -1)
 
     # Othello (Reversi) - Console Version
     # Two-player version (Black = X, White = O) Black = -1 White = 1, black gets index 0 white gets index 1
 
     def create_board(self):
-        board: np.ndarray = np.array([[ 0 for _ in range(self.BOARD_SIZE)]for _ in range(self.BOARD_SIZE)])
+        board: np.ndarray = np.zeros((self.BOARD_SIZE,self.BOARD_SIZE))#np.array([[ 0 for _ in range(self.BOARD_SIZE)]for _ in range(self.BOARD_SIZE)])
         mid = self.BOARD_SIZE // 2
         board[mid - 1][mid - 1] = 1
         board[mid][mid] = 1
@@ -299,7 +309,7 @@ class bot():
     def main(self):
         board = self.create_board()
         #current_player = 'X'
-        player_idx = -1
+        player_idx = -1 # black starts in othello
 
         while True:
             moves = self.valid_moves(board, player_idx)
@@ -362,7 +372,7 @@ if train_bot: # probably add something to cut out files that aren't needed
     print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
     print()
 
-    test.save_brains()
+    #test.save_brains()
 else:
     test.read_brains()
 
@@ -370,7 +380,7 @@ if 1 == 0:
     sim_modes = ["neural_net", "play_random_game"]
 
     start = t.time()
-    network = test.MCTS(test.create_board(), -1, 4*384, sim_modes[0])
+    network = test.MCTS(test.create_board(), -1, 4*384, sim_modes[1])
     end = t.time()
     # the MCTS runs in about 0.39 - 0.91 seconds using a 4 layer [16,12,4] neural net to simulate game outcomes and covers 1263 - 4687 board states with 4*384 iterations
     # the MCTS runs in about 8.95 - 9.42 seconds using random decision making to simulate game outcomes and covers 15977 - 16585 board states with 4*384 iterations
