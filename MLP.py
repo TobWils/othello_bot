@@ -32,8 +32,8 @@ class MLP():
             else:
                 #m = int(input('enter neurons in hidden layer ' + str(i+1) + ': '))
                 m = layer_sizes[i] # alowes for the net shape to be given at net decleration, must give an array of size = hidden_layers - 1
-            self.hidden_layers[i] = np.multiply(np.random.rand(m,n),0.5)-0.2
-            self.biases[i] = np.multiply(np.random.rand(m),0.5)-0.2
+            self.hidden_layers[i] = np.multiply(np.random.rand(m,n),0.5)-0.25
+            self.biases[i] = np.multiply(np.random.rand(m,1),5)-2.5
             #if i == 0 or i == 1: # do not do this again it completely wrecks the nets eval capability
             #    self.hidden_layers[i] = np.ones((m,n))
             #    self.biases[i] = np.random.rand(m)*100 - 200
@@ -54,6 +54,8 @@ class MLP():
 
     def read_bias(self,n: int,location: str):
         self.biases[n] = pd.read_csv(location, header=None, dtype=np.float64).to_numpy().squeeze()
+        if self.num_neurons[n+1] == 1:
+            self.biases[n] = np.array([self.biases[n]])
 
     def read_input(self,idx: int,location: str):
         if location == 'n':
