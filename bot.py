@@ -9,7 +9,7 @@ class bot():
         self.brain = MLP(64,1,"n",4, [16,12,4])
         self.BOARD_SIZE = 8
         self.is_player = bot_player_idx # 1 coresponds to being white player, change to -1 for black
-        self.exploration_const = 1 # is used for MCTS algorithm, specificaly the UCB1 function
+        self.exploration_const = 5 # is used for MCTS algorithm, specificaly the UCB1 function. larger values seem to make the tree search slower but more acurate it seems
     
     def save_brains(self):
         for i in range(self.brain.layers):
@@ -26,7 +26,7 @@ class bot():
             self.brain.read_matrix(i, weight_location)
 
     def evaluate_board(self,board):
-        return self.brain.propigate_withought_softmax(board.flatten())
+        return max(min(self.brain.propigate_withought_softmax(board.flatten())[0],1),0)
 
     def evaluate_moves(self, board, player, eval_mode:str):
         if eval_mode == "neural_net":
@@ -66,7 +66,10 @@ class bot():
 
             move_nodes = [tree[tree[0].child_node_idxs[i]] for i in range(len(tree[0].child_node_idxs))]
 
-            scores = [move_nodes[i].total_val for i in range(len(move_nodes))]
+            if player == 1:
+                scores = [move_nodes[i].total_val/move_nodes[i].number_visits for i in range(len(move_nodes))]
+            else:
+                scores = [1 - move_nodes[i].total_val/move_nodes[i].number_visits for i in range(len(move_nodes))]
 
             return move_nodes[np.argmax(scores)].node_board
         
@@ -75,7 +78,10 @@ class bot():
 
             move_nodes = [tree[tree[0].child_node_idxs[i]] for i in range(len(tree[0].child_node_idxs))]
 
-            scores = [move_nodes[i].total_val for i in range(len(move_nodes))]
+            if player == 1:
+                scores = [move_nodes[i].total_val/move_nodes[i].number_visits for i in range(len(move_nodes))]
+            else:
+                scores = [1 - move_nodes[i].total_val/move_nodes[i].number_visits for i in range(len(move_nodes))]
 
             return move_nodes[np.argmax(scores)].node_board
 
@@ -118,7 +124,7 @@ class bot():
             i += 1
         
         #game = game[3:]
-        winner = np.sum(np.copy(game[i]).flatten()) # signed diference is a good predictor of who is winning in the end
+        winner = max(min(np.sum(np.copy(game[i]).flatten()),0.5),-0.5) + 0.5 # must change later to be probability of white winning, see MCTS play_tree_game() function
         
         #for turn in game:
         for n in range(i):
@@ -127,7 +133,7 @@ class bot():
     # monte carlo tree search
 
     def play_tree_game(self, Board, current_player): # runs a random search for the MCTS
-        board = np.astype(Board, np.int8)
+        board = np.copy(Board)
 
         while True:
             # check if moves can be made
@@ -146,7 +152,7 @@ class bot():
             # change player
             current_player = -current_player
 
-        return np.sum(board.flatten()) # signed diference is a good predictor of who is winning in the end
+        return max(min(np.sum(board.flatten()),0.5),-0.5) + 0.5 # using probability of white winning as output metric
 
     def UCB1(self, total_val, number_visits, number_parent_visits): # is used in the MCTS algorithm for cell evaluation
         return (total_val/number_visits) + (self.exploration_const*np.sqrt(np.log(number_parent_visits)/number_visits))
@@ -183,57 +189,62 @@ class bot():
                             selection_idx = child.node_idx # this method doesnt randomise the selection for unvisited nodes so could be improved in future
                             keep_selecting = False
                             break
-                        else:
-                            child_vals[i] = self.UCB1(child.total_val, child.number_visits, parent_visits)
+                        elif not child.is_terminal_node:
+                            if nodes[selection_idx].node_player == -1:
+                                child_vals[i] = self.UCB1(child.total_val/child.number_visits, child.number_visits, parent_visits) # child.total_val/child.number_visits is the probability that white wins
+                            else:
+                                child_vals[i] = self.UCB1(1 - child.total_val/child.number_visits, child.number_visits, parent_visits)
                     
                     if keep_selecting:
-                        if nodes[childeren[0]].node_player == 1:
-                            selection_idx = childeren[np.argmax(child_vals)]
-                        else:
-                            selection_idx = childeren[np.argmin(child_vals)]
-                        
-                        while nodes[selection_idx].is_terminal_node:
-                            if nodes[childeren[0]].node_player == 1:
-                                child_vals[np.argmax(child_vals)] = 0
-                                selection_idx = childeren[np.argmax(child_vals)]
-                            else:
-                                child_vals[np.argmin(child_vals)] = 0
-                                selection_idx = childeren[np.argmin(child_vals)]
+                        selection_idx = childeren[np.argmax(child_vals)]
 
             #expansion
             if not nodes[selection_idx].is_terminal_node:
-                #current_player_chr = "X" if nodes[selection_idx].node_player == -1 else "O"
                 new_moves = self.valid_moves(nodes[selection_idx].node_board, nodes[selection_idx].node_player)
                 if not new_moves:
-                    nodes[selection_idx].is_terminal_node = True
+                    if not self.valid_moves(nodes[selection_idx].node_board, -nodes[selection_idx].node_player): # deals with game finnishes
+                        nodes[selection_idx].is_terminal_node = True
+                        nodes[selection_idx].total_val = nodes[selection_idx].number_visits
+                        continue
+                    else: # deals with positions you cant move in
+                        current_player = -nodes[selection_idx].node_player
+                        init_board = np.copy(nodes[selection_idx].node_board)
+                        sim_node_idx = len(nodes)
+                        nodes.append(self.node(0, 0, selection_idx, sim_node_idx, init_board, current_player))
+                        nodes[selection_idx].child_node_idxs.append(sim_node_idx)
+
                 else:
                     current_player = -nodes[selection_idx].node_player
                     for i in range(len(new_moves)):
-                        init_board = np.array(nodes[selection_idx].node_board)
+                        init_board = np.copy(nodes[selection_idx].node_board)
                         self.make_move(init_board, -current_player, new_moves[i][0], new_moves[i][1])
                         nodes.append(self.node(0, 0, selection_idx, len(nodes), init_board, current_player))
                         nodes[selection_idx].child_node_idxs.append(len(nodes)-1)
                     
-                    #simulation
                     sim_node_idx = np.random.randint(len(nodes) - len(new_moves), len(nodes)) # this will be the node that we simulae the oucome of in the next step
                     
-                    if simulation_mode == "neural_net":
-                        nodes[sim_node_idx].total_val = self.evaluate_board(nodes[sim_node_idx].node_board)[0] # evaluation using neural nets to be quick, a more expensive sim could be done maybey repurpouse the play game tree function for this
-                    elif simulation_mode == "play_random_game":
-                        #current_player_chr = "O" if current_player_chr == "X" else "X"
-                        nodes[sim_node_idx].total_val = self.play_tree_game(nodes[sim_node_idx].node_board, current_player) # evaluation using random game, should be relativly fast and is more acurate
+                #simulation
+                if simulation_mode == "neural_net":
+                    nodes[sim_node_idx].total_val = self.evaluate_board(nodes[sim_node_idx].node_board)#[0] # evaluation using neural nets to be quick, a more expensive sim could be done maybey repurpouse the play game tree function for this
+                elif simulation_mode == "play_random_game":
+                    nodes[sim_node_idx].total_val = self.play_tree_game(nodes[sim_node_idx].node_board, current_player) # evaluation using random game, should be relativly fast and is more acurate
 
-                    #backpropigation
-                    back_prop_idx = nodes[sim_node_idx].parent_node_idx
-                    while back_prop_idx != -1:
-                        nodes[back_prop_idx].total_val += nodes[sim_node_idx].total_val
-                        nodes[back_prop_idx].number_visits += 1
-                        back_prop_idx = nodes[back_prop_idx].parent_node_idx
+                #backpropigation
+                back_prop_idx = nodes[sim_node_idx].parent_node_idx
+                while back_prop_idx != -1:
+                    nodes[back_prop_idx].total_val += nodes[sim_node_idx].total_val
+                    nodes[back_prop_idx].number_visits += 1
+                    back_prop_idx = nodes[back_prop_idx].parent_node_idx
 
         return nodes
     
-    def MCTS_train(self, tree_iters):
-        pass #tree = self.MCTS(self.create_board(), -1)
+    def MCTS_train(self, tree_iters:int, tree_mode:str):
+        tree = self.MCTS(self.create_board(), -1, tree_iters, tree_mode) # only plays as black
+        np.random.shuffle(tree)
+
+        for Node in tree:
+            if Node.number_visits != 0:
+                self.brain.back_propigate_once_root_mean_squared_Adam(Node.node_board.flatten(), [Node.total_val/Node.number_visits])
 
     # Othello (Reversi) - Console Version
     # Two-player version (Black = X, White = O) Black = -1 White = 1, black gets index 0 white gets index 1
@@ -358,37 +369,47 @@ class bot():
             print("It's a tie!")
 
 
-test = bot(1) # initalise bot
+test = bot(-1) # initalise bot
 
 train_bot = True # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
 retrain_bot = False
+train_MCTS_mode = True
 if train_bot: # probably add something to cut out files that aren't needed
     if not retrain_bot:
         test.read_brains()
-    start = t.time()
-    for i in range(100): # trains bot
-        test.play_training_game()
-    end = t.time()
-    print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
-    print()
+    
+    if train_MCTS_mode:
+        start = t.time()
+        test.MCTS_train(16*384, "play_random_game")
+        end = t.time()
+        print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
+        print()
 
-    #test.save_brains()
+    else:
+        start = t.time()
+        for i in range(100): # trains bot
+            test.play_training_game()
+        end = t.time()
+        print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
+        print()
+
+    test.save_brains()
 else:
     test.read_brains()
 
-if 1 == 0:
+if 1 == 1:
     sim_modes = ["neural_net", "play_random_game"]
 
     start = t.time()
-    network = test.MCTS(test.create_board(), -1, 4*384, sim_modes[1])
+    network = test.MCTS(test.create_board(), -1, 4*384, sim_modes[0]) # player should always be -1 as black goes first this is not to say the player input should be removed though as this is a secial case where we are starting at the same position each time
     end = t.time()
-    # the MCTS runs in about 0.39 - 0.91 seconds using a 4 layer [16,12,4] neural net to simulate game outcomes and covers 1263 - 4687 board states with 4*384 iterations
-    # the MCTS runs in about 8.95 - 9.42 seconds using random decision making to simulate game outcomes and covers 15977 - 16585 board states with 4*384 iterations
+    # the MCTS runs in about 0.58 - 0.61 seconds using a 4 layer [16,12,4] neural net to simulate game outcomes and covers 9346 board states with 4*384 iterations
+    # the MCTS runs in about 10.25 - 10.5 seconds using random decision making to simulate game outcomes and covers 9308 board states with 4*384 iterations
 
     for i in range(min(len(network),5)):
         print(network[i].node_board)
         print(network[i].child_node_idxs)
-        print(network[i].total_val)
+        print(f"estimated probability of white winning is {network[i].total_val/network[i].number_visits}")
         print(network[i].number_visits)
         print()
 

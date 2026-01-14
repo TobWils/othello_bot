@@ -33,7 +33,7 @@ class MLP():
                 #m = int(input('enter neurons in hidden layer ' + str(i+1) + ': '))
                 m = layer_sizes[i] # alowes for the net shape to be given at net decleration, must give an array of size = hidden_layers - 1
             self.hidden_layers[i] = np.multiply(np.random.rand(m,n),0.5)-0.25
-            self.biases[i] = np.multiply(np.random.rand(m,1),5)-2.5
+            self.biases[i] = np.multiply(np.random.rand(m),5)-2.5
             #if i == 0 or i == 1: # do not do this again it completely wrecks the nets eval capability
             #    self.hidden_layers[i] = np.ones((m,n))
             #    self.biases[i] = np.random.rand(m)*100 - 200
@@ -127,18 +127,22 @@ class MLP():
         for i in range(self.layers):
             self.neurons[i+1]: np.ndarray = np.add(np.dot(self.hidden_layers[i],v_out),self.biases[i])# neurons now store values before activation function rather than after for faster & simpler backprop as it means that derive doesnt need to be changed
             v_out: np.ndarray = self.GELU(self.neurons[i+1])
+
+        v_out = v_out**2
+        v_out = v_out/(v_out + 1)
+
         return v_out
     
     def propigate_with_sigmoid(self,v_in: np.ndarray):
-        v_out: np.ndarray = v_in
-        count = 0
-        for matrix in self.hidden_layers:
-            self.neurons[count]: np.ndarray = v_out
-            v_out: np.ndarray = self.ReLU(np.add(np.dot(matrix,v_out),self.biases[count]),count)
-            count +=1
-
-        v_out = self.sigmoid(v_out)
-        self.neurons[count]: np.ndarray = v_out
+        v_out: np.ndarray = np.array(v_in)
+        self.neurons[0]: np.ndarray = np.array(v_out)
+        for i in range(self.layers):
+            self.neurons[i+1]: np.ndarray = np.add(np.dot(self.hidden_layers[i],v_out),self.biases[i])# neurons now store values before activation function rather than after for faster & simpler backprop as it means that derive doesnt need to be changed
+            if i+1 == self.layers:
+                v_out: np.ndarray = self.sigmoid(self.neurons[i+1])
+            else:
+                v_out: np.ndarray = self.GELU(self.neurons[i+1])
+        
         return v_out
 
     def back_propigate_epochs(self,epochs,len_epoch, start_idx):# not been updated for GELU
@@ -388,7 +392,8 @@ class MLP():
 
         O = self.output - Output
         self.loss = np.concatenate([self.loss,[np.log10(np.dot(O,O))]],axis=0)
-        derivative_vector = 2*O
+        derivative_vector = 2*O * (2/(self.neurons[self.layers]**3)) * (self.output**2)
+
 
         for i in self.back_prop_range:
             new_derivative_vector = self.derive(derivative_vector,self.hidden_layers[i],self.neurons[i+1],self.num_neurons[i])
