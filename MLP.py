@@ -90,12 +90,12 @@ class MLP():
         return x
 
     def GELU(self,x):# aproximation due to gausian
-        return x*self.sigmoid(1.6*x)
+        return x*(self.sigmoid(1.6*x) + 0.5) # actual is x*self.sigmoid(1.6*x)
     
     def dGELU(self,x):# also aproximation but is the derivative of the above aproximation function
         x = 1.6*x
         y = self.sigmoid(x)
-        return y*(x*(1 - y) + 1)
+        return y*(x*(1 - y) + 1) + 0.5
 
     def softmax(self,x: np.ndarray):
         T = 0.1
@@ -127,9 +127,6 @@ class MLP():
         for i in range(self.layers):
             self.neurons[i+1]: np.ndarray = np.add(np.dot(self.hidden_layers[i],v_out),self.biases[i])# neurons now store values before activation function rather than after for faster & simpler backprop as it means that derive doesnt need to be changed
             v_out: np.ndarray = self.GELU(self.neurons[i+1])
-
-        v_out = v_out**2
-        v_out = v_out/(v_out + 1)
 
         return v_out
     
@@ -392,7 +389,7 @@ class MLP():
 
         O = self.output - Output
         self.loss = np.concatenate([self.loss,[np.log10(np.dot(O,O))]],axis=0)
-        derivative_vector = 2*O * (2/(self.neurons[self.layers]**3)) * (self.output**2)
+        derivative_vector = 2*O
 
 
         for i in self.back_prop_range:

@@ -2,8 +2,6 @@ import numpy as np
 from MLP import MLP
 import time as t
 
-np.random.seed(100)
-
 class bot():
     def __init__(self, bot_player_idx):
         self.brain = MLP(64,1,"n",4, [16,12,4])
@@ -26,7 +24,7 @@ class bot():
             self.brain.read_matrix(i, weight_location)
 
     def evaluate_board(self,board):
-        return max(min(self.brain.propigate_withought_softmax(board.flatten())[0],1),0)
+        return self.brain.propigate_withought_softmax(board.flatten())
 
     def evaluate_moves(self, board, player, eval_mode:str):
         if eval_mode == "neural_net":
@@ -85,7 +83,7 @@ class bot():
 
             return move_nodes[np.argmax(scores)].node_board
 
-    def play_training_game(self):
+    def play_training_game(self): # does not currently work for some reason
         #board = self.create_board()
         player_idx = -1
         #game = [np.array(board)]
@@ -225,11 +223,12 @@ class bot():
                     
                 #simulation
                 if simulation_mode == "neural_net":
-                    nodes[sim_node_idx].total_val = self.evaluate_board(nodes[sim_node_idx].node_board)#[0] # evaluation using neural nets to be quick, a more expensive sim could be done maybey repurpouse the play game tree function for this
+                    nodes[sim_node_idx].total_val = self.evaluate_board(nodes[sim_node_idx].node_board)[0] # evaluation using neural nets to be quick, a more expensive sim could be done maybey repurpouse the play game tree function for this
                 elif simulation_mode == "play_random_game":
                     nodes[sim_node_idx].total_val = self.play_tree_game(nodes[sim_node_idx].node_board, current_player) # evaluation using random game, should be relativly fast and is more acurate
-
+                
                 #backpropigation
+                nodes[sim_node_idx].number_visits += 1
                 back_prop_idx = nodes[sim_node_idx].parent_node_idx
                 while back_prop_idx != -1:
                     nodes[back_prop_idx].total_val += nodes[sim_node_idx].total_val
@@ -244,6 +243,7 @@ class bot():
 
         for Node in tree:
             if Node.number_visits != 0:
+                print(f"prob:{Node.total_val/Node.number_visits}|vals:{Node.total_val,Node.number_visits}")
                 self.brain.back_propigate_once_root_mean_squared_Adam(Node.node_board.flatten(), [Node.total_val/Node.number_visits])
 
     # Othello (Reversi) - Console Version
@@ -368,11 +368,12 @@ class bot():
         else:
             print("It's a tie!")
 
+np.random.seed(100)
 
 test = bot(-1) # initalise bot
 
 train_bot = True # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
-retrain_bot = False
+retrain_bot = True
 train_MCTS_mode = True
 if train_bot: # probably add something to cut out files that aren't needed
     if not retrain_bot:
@@ -410,6 +411,7 @@ if 1 == 1:
         print(network[i].node_board)
         print(network[i].child_node_idxs)
         print(f"estimated probability of white winning is {network[i].total_val/network[i].number_visits}")
+        print(network[i].total_val)
         print(network[i].number_visits)
         print()
 
