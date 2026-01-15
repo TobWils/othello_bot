@@ -4,7 +4,7 @@ import time as t
 
 class bot():
     def __init__(self, bot_player_idx):
-        self.brain = MLP(64,1,"n",4, [16,12,4])
+        self.brain = MLP(64,2,"n",4, [16,12,4])
         self.BOARD_SIZE = 8
         self.train_w_wins = 0
         self.train_b_wins = 0
@@ -26,7 +26,7 @@ class bot():
             self.brain.read_matrix(i, weight_location)
 
     def evaluate_board(self,board):
-        return self.brain.propigate_withought_softmax(board.flatten())
+        return self.brain.propigate(board.flatten())
 
     def evaluate_moves(self, board, player, eval_mode:str):
         if eval_mode == "neural_net":
@@ -130,7 +130,7 @@ class bot():
         self.train_b_wins += 1-winner
         #for turn in game:
         for n in range(i):
-            self.brain.back_propigate_once_root_mean_squared_Adam(np.copy(game[n]).flatten(),[winner])
+            self.brain.back_propigate_once_cross_entropy_Adam(np.copy(game[n]).flatten(),[winner, 1-winner])
 
     # monte carlo tree search
 
@@ -154,13 +154,15 @@ class bot():
             # change player
             current_player = -current_player
 
-        return max(min(np.sum(board.flatten()),0.5),-0.5) + 0.5 # using probability of white winning as output metric
+        white_win_prob = max(min(np.sum(board.flatten()),0.5),-0.5) + 0.5
+
+        return np.array([white_win_prob, 1-white_win_prob]) # using probability of white winning as output metric
 
     def UCB1(self, total_val, number_visits, number_parent_visits): # is used in the MCTS algorithm for cell evaluation
         return (total_val/number_visits) + (self.exploration_const*np.sqrt(np.log(number_parent_visits)/number_visits))
 
     class node(): # probably should replace later with parralel arrays but use this for now to get it working
-        def __init__(self, total_val:np.float64, number_visits:np.int64, parent_node_idx:np.int64, node_idx:np.int64, board:np.ndarray, player:np.int64):
+        def __init__(self, total_val:np.ndarray, number_visits:np.int64, parent_node_idx:np.int64, node_idx:np.int64, board:np.ndarray, player:np.int64):
             self.total_val = total_val
             self.number_visits = number_visits
             self.parent_node_idx = parent_node_idx
@@ -172,7 +174,7 @@ class bot():
 
     def MCTS(self, board, player, iters, simulation_mode: str):
         #initalisation
-        nodes = [self.node(0, 0, -1, 0, board, player)]
+        nodes = [self.node([0,0], 0, -1, 0, board, player)]
 
         for i in range(iters):
             #selection
@@ -193,9 +195,9 @@ class bot():
                             break
                         elif not child.is_terminal_node:
                             if nodes[selection_idx].node_player == -1:
-                                child_vals[i] = self.UCB1(child.total_val/child.number_visits, child.number_visits, parent_visits) # child.total_val/child.number_visits is the probability that white wins
+                                child_vals[i] = self.UCB1(child.total_val[1]/child.number_visits, child.number_visits, parent_visits) # child.total_val/child.number_visits is the probability that white wins
                             else:
-                                child_vals[i] = self.UCB1(1 - child.total_val/child.number_visits, child.number_visits, parent_visits)
+                                child_vals[i] = self.UCB1(child.total_val[0]/child.number_visits, child.number_visits, parent_visits)
                     
                     if keep_selecting:
                         selection_idx = childeren[np.argmax(child_vals)]
@@ -210,6 +212,7 @@ class bot():
                         if nodes[selection_idx].number_visits == 0:
                             #skip to backpropigation
                             value = (nodes[selection_idx].node_player + 1)/2
+                            value = np.array([value, 1-value])
                             nodes[selection_idx].total_val += value
                             nodes[selection_idx].number_visits += 1
                             back_prop_idx = nodes[selection_idx].parent_node_idx
@@ -232,19 +235,19 @@ class bot():
                     for i in range(len(new_moves)):
                         init_board = np.copy(nodes[selection_idx].node_board)
                         self.make_move(init_board, -current_player, new_moves[i][0], new_moves[i][1])
-                        nodes.append(self.node(0, 0, selection_idx, len(nodes), init_board, current_player))
+                        nodes.append(self.node([0,0], 0, selection_idx, len(nodes), init_board, current_player))
                         nodes[selection_idx].child_node_idxs.append(len(nodes)-1)
                     
                     sim_node_idx = np.random.randint(len(nodes) - len(new_moves), len(nodes)) # this will be the node that we simulae the oucome of in the next step
                     
                 #simulation
                 if simulation_mode == "neural_net":
-                    nodes[sim_node_idx].total_val = max(min(self.evaluate_board(nodes[sim_node_idx].node_board)[0],1),0) # evaluation using neural nets to be quick, a more expensive sim could be done maybey repurpouse the play game tree function for this
+                    nodes[sim_node_idx].total_val = self.evaluate_board(nodes[sim_node_idx].node_board) # evaluation using neural nets to be quick, a more expensive sim could be done maybey repurpouse the play game tree function for this
                 elif simulation_mode == "play_random_game":
                     nodes[sim_node_idx].total_val = self.play_tree_game(nodes[sim_node_idx].node_board, current_player) # evaluation using random game, should be relativly fast and is more acurate
                 
                 #backpropigation
-                nodes[sim_node_idx].number_visits = 1 # shold work as the value previously should have been 0 so 0+1=1
+                nodes[sim_node_idx].number_visits += 1 # shold work as the value previously should have been 0 so 0+1=1
                 back_prop_idx = nodes[sim_node_idx].parent_node_idx
                 while back_prop_idx != -1:
                     nodes[back_prop_idx].total_val += nodes[sim_node_idx].total_val
@@ -261,7 +264,7 @@ class bot():
             if Node.number_visits != 0:
                 #print(f"prob:{Node.total_val/Node.number_visits}|vals:{Node.total_val,Node.number_visits}")
                 for _ in range(Node.number_visits): # max(int(100*Node.number_visits/tree_iters),1)
-                    self.brain.back_propigate_once_root_mean_squared_Adam(Node.node_board.flatten(), [Node.total_val/Node.number_visits])
+                    self.brain.back_propigate_once_cross_entropy_Adam(Node.node_board.flatten(), Node.total_val/Node.number_visits)
 
     # Othello (Reversi) - Console Version
     # Two-player version (Black = X, White = O) Black = -1 White = 1, black gets index 0 white gets index 1
@@ -353,8 +356,8 @@ class bot():
             if player_idx != self.is_player:
                 self.print_board(board)
                 x_count, o_count = self.score(board)
-                print(f"Score → X: {x_count}, O: {o_count}")
-                print(f"{ 'X' if player_idx == -1 else 'O' }'s turn| prediction: {self.evaluate_board(board)[0]}")
+                print(f"Score → O: {o_count}, X: {x_count}")
+                print(f"{ 'X' if player_idx == -1 else 'O' }'s turn| prediction: {self.evaluate_board(board)}")
 
 
                 print("Valid moves:", moves)

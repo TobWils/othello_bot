@@ -110,19 +110,17 @@ class MLP():
         return O
 
     def propigate(self,v_in: np.ndarray):# not been updated for GELU
-        v_out: np.ndarray = v_in
-        count = 0
-        for matrix in self.hidden_layers:
-            self.neurons[count]: np.ndarray = v_out
-            v_out: np.ndarray = self.ReLU(np.add(np.dot(matrix,v_out),self.biases[count]),count)
-            count +=1
+        v_out: np.ndarray = np.copy(v_in)
+        self.neurons[0]: np.ndarray = np.array(v_out)
+        for i in range(self.layers):
+            self.neurons[i+1]: np.ndarray = np.add(np.dot(self.hidden_layers[i],v_out),self.biases[i])# neurons now store values before activation function rather than after for faster & simpler backprop as it means that derive doesnt need to be changed
+            v_out: np.ndarray = self.GELU(self.neurons[i+1])
 
         v_out = self.softmax(v_out)
-        self.neurons[count]: np.ndarray = v_out
         return v_out
 
     def propigate_withought_softmax(self,v_in: np.ndarray):
-        v_out: np.ndarray = np.array(v_in)
+        v_out: np.ndarray = np.copy(v_in)
         self.neurons[0]: np.ndarray = np.array(v_out)
         for i in range(self.layers):
             self.neurons[i+1]: np.ndarray = np.add(np.dot(self.hidden_layers[i],v_out),self.biases[i])# neurons now store values before activation function rather than after for faster & simpler backprop as it means that derive doesnt need to be changed
@@ -342,38 +340,35 @@ class MLP():
     def back_propigate_once_cross_entropy_Adam(self, Input, Output):# not been updated for GELU
         change_array = [np.zeros((self.num_neurons[i+1],self.num_neurons[i]+1)) for i in range(self.layers)]
 
-        beta_1 = 0.8
-        beta_2 = 0.9
-        alpha = 0.08
+        beta_1 = 0.85
+        beta_2 = 0.95
+        alpha = 0.001
 
-        self.input = np.array(Input)
-                
-        self.I = Output
+        self.output = self.propigate(np.copy(Input))
 
-        self.output = self.propigate(self.input)
+        self.loss = np.concatenate([self.loss,[-np.sum(Output*np.log(self.output))]],axis=0)
 
         derivative_vector = self.output - Output
 
-        for i in range(self.layers-1,-1,-1):
-            new_derivative_vector = self.derive(derivative_vector,self.hidden_layers[i],self.neurons[i+1],self.num_neurons[i],i)
+        for i in self.back_prop_range:
+            new_derivative_vector = self.derive(derivative_vector,self.hidden_layers[i],self.neurons[i+1],self.num_neurons[i])
 
-            O1 = np.stack([np.prod(np.transpose(np.array([derivative_vector,self.dReLU(self.neurons[i+1],i)])),axis=1) for _ in range(self.num_neurons[i])], axis=0)
+            O1 = np.stack([np.prod(np.array([derivative_vector,self.dGELU(self.neurons[i+1])]),axis=0) for _ in range(self.num_neurons[i])], axis=0)
 
-            O2 = np.stack([self.neurons[i] for _ in range(self.num_neurons[i+1])], axis=0)
+            O2 = np.stack([self.GELU(self.neurons[i]) for _ in range(self.num_neurons[i+1])], axis=0)
 
-            change_array[i] += np.hstack([np.transpose(np.prod(np.array([O1,np.transpose(O2)]),axis = 0)),np.prod(np.transpose(np.array([derivative_vector,self.dReLU(self.neurons[i+1],i)])),axis=1)[:,None]])
+            change_array = np.hstack([np.transpose(np.prod(np.array([O1,np.transpose(O2)]),axis = 0)),O1[0][:,None]]) # the [:,None] slicing is to give the arrays the same shape [0,0,0] -> [[0],[0],[0]]
+
+            self.momentum_array[i] = self.momentum_array[i]*beta_1 + (1-beta_1)*change_array
+
+            self.velocity_array[i] = self.velocity_array[i]*beta_2 + (1-beta_2)*(change_array**2)
+
+            change = alpha*self.momentum_array[i]/(np.sqrt(np.array(self.velocity_array[i], dtype = np.float64)) + 0.00000001)
+
+            self.hidden_layers[i] -= np.array(change[::,:self.num_neurons[i]], dtype = np.float64)
+            self.biases[i] -= np.array(change[::,self.num_neurons[i]], dtype = np.float64)
 
             derivative_vector = new_derivative_vector
-
-        for i in range(self.layers):
-            self.momentum_array[i] = np.array(self.momentum_array[i])*beta_1 + (1-beta_1)*np.array(change_array[i])
-
-            self.velocity_array[i] = np.array(self.velocity_array[i])*beta_2 + (1-beta_2)*np.prod(np.array([change_array[i],change_array[i]]),axis = 0)
-
-            change = alpha*self.momentum_array[i]/(np.sqrt(self.velocity_array[i]) + 0.000000001)
-
-            self.hidden_layers[i] -= change[::,:self.num_neurons[i]]
-            self.biases[i] -= np.transpose(change[::,self.num_neurons[i]:])[0]
 
     def back_propigate_once_root_mean_squared_Adam(self, Input, Output):
         # changes have been made in this one to make the code faster
@@ -384,8 +379,7 @@ class MLP():
         beta_2 = 0.95
         alpha = 0.001
 
-        self.input = np.array(Input)
-        self.output = self.propigate_withought_softmax(self.input)
+        self.output = self.propigate_withought_softmax(np.copy(Input))
 
         O = self.output - Output
         self.loss = np.concatenate([self.loss,[np.log10(np.dot(O,O))]],axis=0)
