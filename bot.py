@@ -247,7 +247,7 @@ class bot():
                     nodes[sim_node_idx].total_val = self.play_tree_game(nodes[sim_node_idx].node_board, current_player) # evaluation using random game, should be relativly fast and is more acurate
                 
                 #backpropigation
-                nodes[sim_node_idx].number_visits += 1 # shold work as the value previously should have been 0 so 0+1=1
+                nodes[sim_node_idx].number_visits = 1 # shold work as the value previously should have been 0 so 0+1=1
                 back_prop_idx = nodes[sim_node_idx].parent_node_idx
                 while back_prop_idx != -1:
                     nodes[back_prop_idx].total_val += nodes[sim_node_idx].total_val
@@ -393,7 +393,7 @@ np.random.seed(100)
 test = bot(-1) # initalise bot
 
 train_bot = True # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
-retrain_bot = True
+retrain_bot = False
 train_MCTS_mode = True
 if train_bot: # probably add something to cut out files that aren't needed
     if not retrain_bot:
@@ -430,10 +430,10 @@ if 1 == 1:
     # the MCTS runs in about 0.58 - 0.61 seconds using a 4 layer [16,12,4] neural net to simulate game outcomes and covers 9346 board states with 4*384 iterations
     # the MCTS runs in about 10.25 - 10.5 seconds using random decision making to simulate game outcomes and covers 9308 board states with 4*384 iterations
 
-    for i in range(min(len(network),5)):
+    for i in range(min(len(network),32)):
         print(network[i].node_board)
         print(network[i].child_node_idxs)
-        print(f"estimated probability of white winning is {network[i].total_val/network[i].number_visits}")
+        print(f"estimated (W win | B win): {network[i].total_val/network[i].number_visits}")
         print(network[i].total_val)
         print(network[i].number_visits)
         print()
