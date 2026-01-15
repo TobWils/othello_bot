@@ -6,6 +6,8 @@ class bot():
     def __init__(self, bot_player_idx):
         self.brain = MLP(64,1,"n",4, [16,12,4])
         self.BOARD_SIZE = 8
+        self.train_w_wins = 0
+        self.train_b_wins = 0
         self.is_player = bot_player_idx # 1 coresponds to being white player, change to -1 for black
         self.exploration_const = 5 # is used for MCTS algorithm, specificaly the UCB1 function. larger values seem to make the tree search slower but more acurate it seems
     
@@ -103,7 +105,7 @@ class bot():
 
             # make moves
             if True:
-                if np.random.randint(0,5) < 3: # the partialy random action is to alow the bot to see more game posibilities in training
+                if np.random.randint(0,5) < 5: # the partialy random action is to alow the bot to see more game posibilities in training
                     move = moves[np.random.randint(0,len(moves))]
                 else:
                     move = self.evaluate_moves(np.copy(game[i]), player_idx, "neural_net")
@@ -123,7 +125,9 @@ class bot():
         
         #game = game[3:]
         winner = max(min(np.sum(np.copy(game[i]).flatten()),0.5),-0.5) + 0.5 # must change later to be probability of white winning, see MCTS play_tree_game() function
-        
+
+        self.train_w_wins += winner
+        self.train_b_wins += 1-winner
         #for turn in game:
         for n in range(i):
             self.brain.back_propigate_once_root_mean_squared_Adam(np.copy(game[n]).flatten(),[winner])
@@ -202,8 +206,20 @@ class bot():
                 if not new_moves:
                     if not self.valid_moves(nodes[selection_idx].node_board, -nodes[selection_idx].node_player): # deals with game finnishes
                         nodes[selection_idx].is_terminal_node = True
-                        nodes[selection_idx].total_val = nodes[selection_idx].number_visits
+
+                        if nodes[selection_idx].number_visits == 0:
+                            #skip to backpropigation
+                            value = (nodes[selection_idx].node_player + 1)/2
+                            nodes[selection_idx].total_val += value
+                            nodes[selection_idx].number_visits += 1
+                            back_prop_idx = nodes[selection_idx].parent_node_idx
+                            while back_prop_idx != -1:
+                                nodes[back_prop_idx].total_val += value
+                                nodes[back_prop_idx].number_visits += 1
+                                back_prop_idx = nodes[back_prop_idx].parent_node_idx
+                        
                         continue
+
                     else: # deals with positions you cant move in
                         current_player = -nodes[selection_idx].node_player
                         init_board = np.copy(nodes[selection_idx].node_board)
@@ -223,12 +239,12 @@ class bot():
                     
                 #simulation
                 if simulation_mode == "neural_net":
-                    nodes[sim_node_idx].total_val = self.evaluate_board(nodes[sim_node_idx].node_board)[0] # evaluation using neural nets to be quick, a more expensive sim could be done maybey repurpouse the play game tree function for this
+                    nodes[sim_node_idx].total_val = max(min(self.evaluate_board(nodes[sim_node_idx].node_board)[0],1),0) # evaluation using neural nets to be quick, a more expensive sim could be done maybey repurpouse the play game tree function for this
                 elif simulation_mode == "play_random_game":
                     nodes[sim_node_idx].total_val = self.play_tree_game(nodes[sim_node_idx].node_board, current_player) # evaluation using random game, should be relativly fast and is more acurate
                 
                 #backpropigation
-                nodes[sim_node_idx].number_visits += 1
+                nodes[sim_node_idx].number_visits = 1 # shold work as the value previously should have been 0 so 0+1=1
                 back_prop_idx = nodes[sim_node_idx].parent_node_idx
                 while back_prop_idx != -1:
                     nodes[back_prop_idx].total_val += nodes[sim_node_idx].total_val
@@ -243,8 +259,9 @@ class bot():
 
         for Node in tree:
             if Node.number_visits != 0:
-                print(f"prob:{Node.total_val/Node.number_visits}|vals:{Node.total_val,Node.number_visits}")
-                self.brain.back_propigate_once_root_mean_squared_Adam(Node.node_board.flatten(), [Node.total_val/Node.number_visits])
+                #print(f"prob:{Node.total_val/Node.number_visits}|vals:{Node.total_val,Node.number_visits}")
+                for _ in range(Node.number_visits): # max(int(100*Node.number_visits/tree_iters),1)
+                    self.brain.back_propigate_once_root_mean_squared_Adam(Node.node_board.flatten(), [Node.total_val/Node.number_visits])
 
     # Othello (Reversi) - Console Version
     # Two-player version (Black = X, White = O) Black = -1 White = 1, black gets index 0 white gets index 1
@@ -381,17 +398,20 @@ if train_bot: # probably add something to cut out files that aren't needed
     
     if train_MCTS_mode:
         start = t.time()
-        test.MCTS_train(16*384, "play_random_game")
+        test.MCTS_train(1*384, "play_random_game")
         end = t.time()
         print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
         print()
 
     else:
         start = t.time()
-        for i in range(100): # trains bot
+        for i in range(300): # trains bot
             test.play_training_game()
         end = t.time()
         print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
+        print(test.train_w_wins/(test.train_w_wins+test.train_b_wins))
+        print(test.train_w_wins)
+        print(test.train_b_wins)
         print()
 
     test.save_brains()

@@ -381,7 +381,7 @@ class MLP():
         #start = time.time()
 
         beta_1 = 0.85
-        beta_2 = 0.995
+        beta_2 = 0.95
         alpha = 0.001
 
         self.input = np.array(Input)
