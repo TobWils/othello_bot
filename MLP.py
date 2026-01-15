@@ -90,12 +90,12 @@ class MLP():
         return x
 
     def GELU(self,x):# aproximation due to gausian
-        return x*(self.sigmoid(1.6*x) + 0.5) # actual is x*self.sigmoid(1.6*x)
+        return x*(self.sigmoid(1.6*x) ) # actual is x*self.sigmoid(1.6*x)
     
     def dGELU(self,x):# also aproximation but is the derivative of the above aproximation function
         x = 1.6*x
         y = self.sigmoid(x)
-        return y*(x*(1 - y) + 1) + 0.5
+        return y*(x*(1 - y) + 1) 
 
     def softmax(self,x: np.ndarray):
         T = 0.1

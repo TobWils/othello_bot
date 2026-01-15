@@ -4,7 +4,7 @@ import time as t
 
 class bot():
     def __init__(self, bot_player_idx):
-        self.brain = MLP(64,2,"n",4, [16,12,4])
+        self.brain = MLP(64,2,"n",8, [64,64,64,64,64,64,64])
         self.BOARD_SIZE = 8
         self.train_w_wins = 0
         self.train_b_wins = 0
@@ -263,8 +263,8 @@ class bot():
         for Node in tree:
             if Node.number_visits != 0:
                 #print(f"prob:{Node.total_val/Node.number_visits}|vals:{Node.total_val,Node.number_visits}")
-                for _ in range(Node.number_visits): # max(int(100*Node.number_visits/tree_iters),1)
-                    self.brain.back_propigate_once_cross_entropy_Adam(Node.node_board.flatten(), Node.total_val/Node.number_visits)
+                #for _ in range(Node.number_visits): # max(int(100*Node.number_visits/tree_iters),1)
+                self.brain.back_propigate_once_cross_entropy_Adam(Node.node_board.flatten(), Node.total_val/Node.number_visits)
 
     # Othello (Reversi) - Console Version
     # Two-player version (Black = X, White = O) Black = -1 White = 1, black gets index 0 white gets index 1
@@ -403,7 +403,7 @@ if train_bot: # probably add something to cut out files that aren't needed
         start = t.time()
         test.MCTS_train(1*384, "play_random_game")
         end = t.time()
-        print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
+        print(end - start)
         print()
 
     else:
@@ -432,7 +432,7 @@ if 1 == 1:
 
     for i in range(min(len(network),32)):
         print(network[i].node_board)
-        print(network[i].child_node_idxs)
+        print(network[i].node_player)
         print(f"estimated (W win | B win): {network[i].total_val/network[i].number_visits}")
         print(network[i].total_val)
         print(network[i].number_visits)
