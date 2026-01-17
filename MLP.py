@@ -32,8 +32,8 @@ class MLP():
             else:
                 #m = int(input('enter neurons in hidden layer ' + str(i+1) + ': '))
                 m = layer_sizes[i] # alowes for the net shape to be given at net decleration, must give an array of size = hidden_layers - 1
-            self.hidden_layers[i] = np.multiply(np.random.rand(m,n),0.5)-0.25
-            self.biases[i] = np.multiply(np.random.rand(m),5)-2.5
+            self.hidden_layers[i] = np.multiply(np.random.rand(m,n),5)-2.5
+            self.biases[i] = np.multiply(np.random.rand(m),0.05)-0.025
             #if i == 0 or i == 1: # do not do this again it completely wrecks the nets eval capability
             #    self.hidden_layers[i] = np.ones((m,n))
             #    self.biases[i] = np.random.rand(m)*100 - 200
@@ -90,15 +90,15 @@ class MLP():
         return x
 
     def GELU(self,x):# aproximation due to gausian
-        return x*(self.sigmoid(1.6*x) ) # actual is x*self.sigmoid(1.6*x)
+        return x*(self.sigmoid(1.6*x) +0.1) # actual is x*self.sigmoid(1.6*x)
     
     def dGELU(self,x):# also aproximation but is the derivative of the above aproximation function
         x = 1.6*x
         y = self.sigmoid(x)
-        return y*(x*(1 - y) + 1) 
+        return y*(x*(1 - y) + 1) +0.1
 
     def softmax(self,x: np.ndarray):
-        T = 0.1
+        T = 0.01
         x = x*T
         e_x = np.exp(x - np.max(x))
         return e_x / np.sum(e_x, axis=0)
@@ -366,7 +366,7 @@ class MLP():
             change = alpha*self.momentum_array[i]/(np.sqrt(np.array(self.velocity_array[i], dtype = np.float64)) + 0.00000001)
 
             self.hidden_layers[i] -= np.array(change[::,:self.num_neurons[i]], dtype = np.float64)
-            self.biases[i] -= np.array(change[::,self.num_neurons[i]], dtype = np.float64)
+            self.biases[i] -= 0.001*np.array(change[::,self.num_neurons[i]], dtype = np.float64)
 
             derivative_vector = new_derivative_vector
 

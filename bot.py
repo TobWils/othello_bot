@@ -9,7 +9,7 @@ class bot():
         self.train_w_wins = 0
         self.train_b_wins = 0
         self.is_player = bot_player_idx # 1 coresponds to being white player, change to -1 for black
-        self.exploration_const = 5 # is used for MCTS algorithm, specificaly the UCB1 function. larger values seem to make the tree search slower but more acurate it seems
+        self.exploration_const = 3 # is used for MCTS algorithm, specificaly the UCB1 function. larger values seem to make the tree search slower but more acurate it seems
     
     def save_brains(self):
         for i in range(self.brain.layers):
@@ -62,14 +62,17 @@ class bot():
             return moves[np.argmax(scores.transpose() * player)] # the *player bit is to acount for the negative values coresponding to black
     
         elif eval_mode == "MCTS_neural_net":
-            tree = self.MCTS(board, player, 4*384, "neural_net")
+            tree = self.MCTS(board, player, 16*384, "neural_net")
 
-            move_nodes = [tree[tree[0].child_node_idxs[i]] for i in range(len(tree[0].child_node_idxs))]
+            #move_nodes = [tree[tree[0].child_node_idxs[i]] for i in range(len(tree[0].child_node_idxs))]
+            move_nodes = [tree[idx] for idx in tree[0].child_node_idxs]
 
             if player == 1:
-                scores = [move_nodes[i].total_val/move_nodes[i].number_visits for i in range(len(move_nodes))]
+                #scores = [move_nodes[i].total_val[0]/move_nodes[i].number_visits for i in range(len(move_nodes))]
+                scores = [idx.total_val[0]/idx.number_visits for idx in move_nodes]
             else:
-                scores = [1 - move_nodes[i].total_val/move_nodes[i].number_visits for i in range(len(move_nodes))]
+                #scores = [move_nodes[i].total_val[1]/move_nodes[i].number_visits for i in range(len(move_nodes))]
+                scores = [idx.total_val[1]/idx.number_visits for idx in move_nodes]
 
             return move_nodes[np.argmax(scores)].node_board
         
@@ -261,7 +264,7 @@ class bot():
         np.random.shuffle(tree)
 
         for Node in tree:
-            if Node.number_visits != 0:
+            if Node.number_visits > 5:
                 #print(f"prob:{Node.total_val/Node.number_visits}|vals:{Node.total_val,Node.number_visits}")
                 #for _ in range(Node.number_visits): # max(int(100*Node.number_visits/tree_iters),1)
                 self.brain.back_propigate_once_cross_entropy_Adam(Node.node_board.flatten(), Node.total_val/Node.number_visits)
@@ -280,7 +283,7 @@ class bot():
 
     def print_board(self,board):
         """Display the board."""
-        board = np.array(board, dtype= str)
+        board = np.array(np.astype(board, np.int8), dtype= str)
         board = np.char.replace(board, "0", " ")
         board = np.char.replace(board, "-1", "X")
         board = np.char.replace(board, "1", "O")
@@ -373,7 +376,7 @@ class bot():
                 self.make_move(board, player_idx, row, col)
 
             elif player_idx == self.is_player:
-                board = self.evaluate_moves(board, self.is_player, "MCTS_random")
+                board = self.evaluate_moves(board, self.is_player, "MCTS_neural_net")
 
             #current_player = 'O' if current_player == 'X' else 'X'
             player_idx = -player_idx
@@ -401,7 +404,7 @@ if train_bot: # probably add something to cut out files that aren't needed
     
     if train_MCTS_mode:
         start = t.time()
-        test.MCTS_train(1*384, "play_random_game")
+        test.MCTS_train(32*256*384, "play_random_game")
         end = t.time()
         print(end - start)
         print()
@@ -441,4 +444,4 @@ if 1 == 1:
     print(len(network))
     print(end - start)
 
-#test.main()
+test.main()
