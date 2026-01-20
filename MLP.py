@@ -98,7 +98,7 @@ class MLP():
         return y*(x*(1 - y) + 1) +0.1
 
     def softmax(self,x: np.ndarray):
-        T = 0.01
+        T = 0.1
         x = x*T
         e_x = np.exp(x - np.max(x))
         return e_x / np.sum(e_x, axis=0)
@@ -341,7 +341,7 @@ class MLP():
         change_array = [np.zeros((self.num_neurons[i+1],self.num_neurons[i]+1)) for i in range(self.layers)]
 
         beta_1 = 0.85
-        beta_2 = 0.95
+        beta_2 = 0.995
         alpha = 0.001
 
         self.output = self.propigate(np.copy(Input))
@@ -366,7 +366,7 @@ class MLP():
             change = alpha*self.momentum_array[i]/(np.sqrt(np.array(self.velocity_array[i], dtype = np.float64)) + 0.00000001)
 
             self.hidden_layers[i] -= np.array(change[::,:self.num_neurons[i]], dtype = np.float64)
-            self.biases[i] -= 0.001*np.array(change[::,self.num_neurons[i]], dtype = np.float64)
+            self.biases[i] -= 0.01*np.array(change[::,self.num_neurons[i]], dtype = np.float64)
 
             derivative_vector = new_derivative_vector
 

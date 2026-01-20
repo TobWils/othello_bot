@@ -62,7 +62,7 @@ class bot():
             return moves[np.argmax(scores.transpose() * player)] # the *player bit is to acount for the negative values coresponding to black
     
         elif eval_mode == "MCTS_neural_net":
-            tree = self.MCTS(board, player, 16*384, "neural_net")
+            tree = self.MCTS(board, player, 64*384, "neural_net")
 
             #move_nodes = [tree[tree[0].child_node_idxs[i]] for i in range(len(tree[0].child_node_idxs))]
             move_nodes = [tree[idx] for idx in tree[0].child_node_idxs]
@@ -259,15 +259,22 @@ class bot():
 
         return nodes
     
-    def MCTS_train(self, tree_iters:int, tree_mode:str):
+    def MCTS_train(self, tree_iters:int, tree_mode:str, save_as_go:bool):
         tree = self.MCTS(self.create_board(), -1, tree_iters, tree_mode) # only plays as black
         np.random.shuffle(tree)
+
+        t1 = t.time()
 
         for Node in tree:
             if Node.number_visits > 5:
                 #print(f"prob:{Node.total_val/Node.number_visits}|vals:{Node.total_val,Node.number_visits}")
                 #for _ in range(Node.number_visits): # max(int(100*Node.number_visits/tree_iters),1)
                 self.brain.back_propigate_once_cross_entropy_Adam(Node.node_board.flatten(), Node.total_val/Node.number_visits)
+            
+            t2 = t.time()
+            if t2 - t1 > 1800 and save_as_go: # saves progress every 30 min roughly (1800 sec)
+                self.save_brains()
+                t1 = t.time()
 
     # Othello (Reversi) - Console Version
     # Two-player version (Black = X, White = O) Black = -1 White = 1, black gets index 0 white gets index 1
@@ -391,20 +398,20 @@ class bot():
         else:
             print("It's a tie!")
 
-np.random.seed(100)
+np.random.seed(1000)
 
-test = bot(-1) # initalise bot
+test = bot(1) # initalise bot
 
 train_bot = True # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
-retrain_bot = False
+retrain_bot = True
 train_MCTS_mode = True
 if train_bot: # probably add something to cut out files that aren't needed
     if not retrain_bot:
         test.read_brains()
-    
+
     if train_MCTS_mode:
         start = t.time()
-        test.MCTS_train(32*256*384, "play_random_game")
+        test.MCTS_train(256*256*384, "play_random_game", True)
         end = t.time()
         print(end - start)
         print()
@@ -433,7 +440,7 @@ if 1 == 1:
     # the MCTS runs in about 0.58 - 0.61 seconds using a 4 layer [16,12,4] neural net to simulate game outcomes and covers 9346 board states with 4*384 iterations
     # the MCTS runs in about 10.25 - 10.5 seconds using random decision making to simulate game outcomes and covers 9308 board states with 4*384 iterations
 
-    for i in range(min(len(network),32)):
+    for i in range(min(len(network),5)):
         print(network[i].node_board)
         print(network[i].node_player)
         print(f"estimated (W win | B win): {network[i].total_val/network[i].number_visits}")
