@@ -402,8 +402,8 @@ np.random.seed(1000)
 
 test = bot(1) # initalise bot
 
-train_bot = True # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
-retrain_bot = True
+train_bot = False # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
+retrain_bot = False
 train_MCTS_mode = True
 if train_bot: # probably add something to cut out files that aren't needed
     if not retrain_bot:
