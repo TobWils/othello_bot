@@ -12,6 +12,7 @@ class bot():
         self.is_player = bot_player_idx # 1 coresponds to being white player, change to -1 for black
         self.exploration_const = 3 # is used for MCTS algorithm, specificaly the UCB1 function. larger values seem to make the tree search slower but more acurate it seems
         self.train_acuracy = np.array([0])
+        self.test_acuracy = np.array([0])
     
     def save_brains(self):
         for i in range(self.brain.layers):
@@ -30,12 +31,13 @@ class bot():
     def evaluate_board(self,board):
         return self.brain.propigate(board.flatten())
 
-    def evaluate_moves(self, board, player, eval_mode:str):
+    def evaluate_moves(self, board, player, eval_mode:str): # your efectively recalculating what moves are posible here so could optimise further in the training game code
         if eval_mode == "neural_net":
             """Return all valid moves for the player."""
             opponent = -player
             directions = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]
             moves = np.array([[0,0]],dtype=np.ndarray)
+            number_moves = 0
 
             for r in range(self.BOARD_SIZE):
                 for c in range(self.BOARD_SIZE):
@@ -50,18 +52,19 @@ class bot():
                             found_opponent = True
                         if found_opponent and 0 <= nr < self.BOARD_SIZE and 0 <= nc < self.BOARD_SIZE and board[nr][nc] == player:
                             moves = np.concat((moves,np.array([[r,c]])),axis=0)
+                            number_moves += 1
                             break
             #moves = moves[1:]
             
-            scores = np.array(moves,dtype=np.ndarray) # probably a better way of doing this like incorporating it into the main loop
+            scores = np.zeros(number_moves) # probably a better way of doing this like incorporating it into the main loop
             
-            for i in range(1,len(moves)):
-                temp_board = np.array(board)
+            for i in range(1,number_moves+1):
+                temp_board = np.copy(board)
                 self.make_move(temp_board, player, moves[i][0], moves[i][1]) # fixed the probelm of all the temp_boards being the same, the net eval has some other issue here > problem was with matrix decleration in the MLP has been fixed now
                 #scores[i] = np.sum(temp_board.flatten())
-                scores[i] = self.brain.propigate_withought_softmax(temp_board.flatten())[1*(player<0)]
+                scores[i-1] = self.brain.propigate(temp_board.flatten())[1*(player<0)]
 
-            return moves[np.argmax(scores.transpose() * player)] # the *player bit is to acount for the negative values coresponding to black
+            return moves[np.argmax(scores)+1] # the *player bit is to acount for the negative values coresponding to black
     
         elif eval_mode == "MCTS_neural_net":
             tree = self.MCTS(board, player, 64*384, "neural_net")
@@ -90,7 +93,7 @@ class bot():
 
             return move_nodes[np.argmax(scores)].node_board
 
-    def play_training_game(self,index): # does not currently work for some reason
+    def play_training_game(self,index): # should be fixed, though i may have brocken something else to do with the evaluate moves function in the prosses
         #board = self.create_board()
         player_idx = -1
         #game = [np.array(board)]
@@ -109,7 +112,7 @@ class bot():
                 continue
 
             # make moves
-            if np.random.randint(0,5) < 2: # the partialy random action is to alow the bot to see more game posibilities in training
+            if np.random.randint(0,5) < 4: # the partialy random action is to alow the bot to see more game posibilities in training
                 move = moves[np.random.randint(0,len(moves))]
             else:
                 move = self.evaluate_moves(np.copy(game[i]), player_idx, "neural_net")
@@ -129,11 +132,54 @@ class bot():
         self.train_b_wins += 1-winner
 
         bot_answers = 0
+
         for n in range(3, i):
-            #self.brain.back_propigate_once_cross_entropy_Adam(np.copy(game[n]).flatten(),[winner, 1-winner])
-            bot_answers += 1*(np.argmax(self.brain.neurons[self.brain.layers]) == (1-winner))
+            self.brain.back_propigate_once_cross_entropy_Adam(game[n].flatten(),[winner, 1-winner])
+            bot_answers += 1*(np.argmax(self.brain.neurons[self.brain.layers]) == (1-winner)) #1*(np.argmax(self.brain.propigate(np.copy(game[n]).flatten())) == (1-winner))
         
         self.train_acuracy[index] = bot_answers/(i-3)
+
+    def play_testing_game(self,index): # should be fixed, though i may have brocken something else to do with the evaluate moves function in the prosses
+        #board = self.create_board()
+        player_idx = -1
+        #game = [np.array(board)]
+        game = np.zeros((61,8,8), dtype=np.float64)
+        game[0] = self.create_board()
+        i = 0
+
+        while True:
+            # check if moves can be made
+            moves = self.valid_moves(game[i], player_idx)
+
+            if not moves:
+                if not self.valid_moves(game[i], -player_idx): # stop game if no moves can be made by anyone
+                    break
+                player_idx = -player_idx
+                continue
+
+            # make moves
+            if np.random.randint(0,5) < 4: # the partialy random action is to alow the bot to see more game posibilities in training
+                move = moves[np.random.randint(0,len(moves))]
+            else:
+                move = self.evaluate_moves(np.copy(game[i]), player_idx, "neural_net")
+
+            board = np.copy(game[i])
+            self.make_move(board, player_idx,move[0],move[1])
+            game[i+1] = np.copy(board)
+
+            # change player
+            player_idx = -player_idx
+
+            i += 1
+        
+        winner = 1*(np.sum(game[i].flatten())>0)
+
+        bot_answers = 0
+
+        for n in range(i):
+            bot_answers += 1*(np.argmax(self.brain.propigate(game[n].flatten())) == (1-winner))
+        
+        self.test_acuracy[index] = bot_answers/(i)
 
 
     # monte carlo tree search
@@ -403,7 +449,7 @@ np.random.seed(1000)
 
 test = bot(1) # initalise bot
 
-train_bot = True # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
+train_bot = False # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
 retrain_bot = False
 train_MCTS_mode = False
 if train_bot: # probably add something to cut out files that aren't needed
@@ -425,16 +471,28 @@ if train_bot: # probably add something to cut out files that aren't needed
             test.play_training_game(i)
         end = t.time()
         print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
+        print(f"average training acuracy was: {np.round(np.average(test.train_acuracy),4)*100}%")
         print(test.train_w_wins/(test.train_w_wins+test.train_b_wins))
         print(test.train_w_wins)
         print(test.train_b_wins)
         print()
 
-    #test.save_brains()
+    test.save_brains()
 else:
     test.read_brains()
 
-plt.plot(test.train_acuracy)
+test_iters = 3000
+test.test_acuracy = np.zeros(test_iters)
+start = t.time()
+for i in range(test_iters):
+    test.play_testing_game(i)
+end = t.time()
+
+print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
+print(f"average testing acuracy was: {str(np.round(np.average(test.test_acuracy),4)*100)[:5]}% \naverage test speed was: {(end-start)/test_iters} sec/itr")
+print()
+
+plt.plot(test.test_acuracy)
 plt.show()
 
 if 0 == 1:
