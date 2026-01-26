@@ -346,7 +346,7 @@ class MLP():
 
         self.output = self.propigate(np.copy(Input))
 
-        self.loss = np.concatenate([self.loss,[-np.sum(Output*np.log(self.output))]],axis=0)
+        self.loss = np.concatenate([self.loss,[-np.sum(Output*np.log(self.output + 10**(-200)))]],axis=0)
 
         derivative_vector = self.output - Output
 
