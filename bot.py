@@ -5,13 +5,12 @@ import matplotlib.pyplot as plt
 
 class bot():
     def __init__(self, bot_player_idx):
-        self.brain = MLP(64,2,"n",8, [64,64,64,64,64,64,64])
+        self.brain = MLP(64,2,"n",3, [96,96,96,96,96,96,96])
         self.BOARD_SIZE = 8
         self.train_w_wins = 0
         self.train_b_wins = 0
         self.is_player = bot_player_idx # 1 coresponds to being white player, change to -1 for black
         self.exploration_const = 3 # is used for MCTS algorithm, specificaly the UCB1 function. larger values seem to make the tree search slower but more acurate it seems
-        self.train_acuracy = np.array([0])
         self.test_acuracy = np.array([0])
     
     def save_brains(self):
@@ -93,7 +92,7 @@ class bot():
 
             return move_nodes[np.argmax(scores)].node_board
 
-    def play_training_game(self,index): # should be fixed, though i may have brocken something else to do with the evaluate moves function in the prosses
+    def play_training_game(self): # should be fixed, though i may have brocken something else to do with the evaluate moves function in the prosses
         #board = self.create_board()
         player_idx = -1
         #game = [np.array(board)]
@@ -131,15 +130,13 @@ class bot():
         self.train_w_wins += winner
         self.train_b_wins += 1-winner
 
-        bot_answers = 0
+        turns_back = 45
+        for n in range((i-turns_back)*(i>turns_back), i):
+            # [0.5,0.5]*(1- n/turns_back) + [winner, 1-winner]*(n/turns_back) idea is to make it more certain of its predictions the later in the game the turn is
+            interpolation_const = 1 - n/i
+            self.brain.back_propigate_once_cross_entropy_Adam(game[n].flatten(),[0.5*interpolation_const + winner*(1-interpolation_const), 0.5*interpolation_const + (1-winner)*(1-interpolation_const)])
 
-        for n in range(3, i):
-            self.brain.back_propigate_once_cross_entropy_Adam(game[n].flatten(),[winner, 1-winner])
-            bot_answers += 1*(np.argmax(self.brain.neurons[self.brain.layers]) == (1-winner)) #1*(np.argmax(self.brain.propigate(np.copy(game[n]).flatten())) == (1-winner))
-        
-        self.train_acuracy[index] = bot_answers/(i-3)
-
-    def play_testing_game(self,index): # should be fixed, though i may have brocken something else to do with the evaluate moves function in the prosses
+    def play_testing_game(self,index, turns_back): # should be fixed, though i may have brocken something else to do with the evaluate moves function in the prosses
         #board = self.create_board()
         player_idx = -1
         #game = [np.array(board)]
@@ -175,11 +172,10 @@ class bot():
         winner = 1*(np.sum(game[i].flatten())>0)
 
         bot_answers = 0
-
-        for n in range(i):
+        for n in range((i-turns_back)*(i>turns_back),i):
             bot_answers += 1*(np.argmax(self.brain.propigate(game[n].flatten())) == (1-winner))
         
-        self.test_acuracy[index] = bot_answers/(i)
+        self.test_acuracy[index] = bot_answers/(turns_back + (i - turns_back)*(i<turns_back))
 
 
     # monte carlo tree search
@@ -449,7 +445,7 @@ np.random.seed(1000)
 
 test = bot(1) # initalise bot
 
-train_bot = False # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
+train_bot = True # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
 retrain_bot = False
 train_MCTS_mode = False
 if train_bot: # probably add something to cut out files that aren't needed
@@ -464,14 +460,12 @@ if train_bot: # probably add something to cut out files that aren't needed
         print()
 
     else:
-        train_iters = 300
-        test.train_acuracy = np.zeros(train_iters)
+        train_iters = 3000
         start = t.time()
         for i in range(train_iters): # trains bot
-            test.play_training_game(i)
+            test.play_training_game()
         end = t.time()
         print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
-        print(f"average training acuracy was: {np.round(np.average(test.train_acuracy),4)*100}%")
         print(test.train_w_wins/(test.train_w_wins+test.train_b_wins))
         print(test.train_w_wins)
         print(test.train_b_wins)
@@ -481,18 +475,43 @@ if train_bot: # probably add something to cut out files that aren't needed
 else:
     test.read_brains()
 
+# testing
 test_iters = 3000
 test.test_acuracy = np.zeros(test_iters)
+prediction_dist = np.zeros(test_iters)
 start = t.time()
 for i in range(test_iters):
-    test.play_testing_game(i)
+    test.play_testing_game(i, int(59*(i/test_iters) + 1))
+    prediction_dist[i] = int(59*(i/test_iters) + 1)
 end = t.time()
 
 print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
 print(f"average testing acuracy was: {str(np.round(np.average(test.test_acuracy),4)*100)[:5]}% \naverage test speed was: {(end-start)/test_iters} sec/itr")
 print()
 
-plt.plot(test.test_acuracy)
+
+kernel_size = 150
+if 1 == 0:
+    smoothing_kernel = np.arange(kernel_size)
+    for i in range(int(kernel_size/2),kernel_size):
+        smoothing_kernel[i] = kernel_size - i
+
+    smoothing_kernel = smoothing_kernel/np.sum(smoothing_kernel)
+else:
+    smoothing_kernel = np.ones(kernel_size)/kernel_size
+
+smoothed_acuracy = np.convolve(test.test_acuracy,smoothing_kernel,'valid')
+smoothed_distances = np.convolve(prediction_dist,smoothing_kernel,'valid')
+
+if train_bot:
+    plt.subplot(221)
+    plt.plot(smoothed_distances,smoothed_acuracy)
+    plt.subplot(223)
+    plt.scatter(prediction_dist,test.test_acuracy)
+    plt.subplot(122)
+    plt.plot(test.brain.loss)
+else:
+    plt.plot(smoothed_distances,smoothed_acuracy)
 plt.show()
 
 if 0 == 1:
