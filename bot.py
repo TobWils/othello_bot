@@ -475,8 +475,8 @@ if train_bot: # probably add something to cut out files that aren't needed
 else:
     test.read_brains()
 
-# testing
-test_iters = 3000
+# testing, last test result was an over all 68.4% acuracy
+test_iters = 10000
 test.test_acuracy = np.zeros(test_iters)
 prediction_dist = np.zeros(test_iters)
 start = t.time()
@@ -490,7 +490,7 @@ print(f"average testing acuracy was: {str(np.round(np.average(test.test_acuracy)
 print()
 
 
-kernel_size = 150
+kernel_size = int(test_iters/20)
 if 1 == 0:
     smoothing_kernel = np.arange(kernel_size)
     for i in range(int(kernel_size/2),kernel_size):
