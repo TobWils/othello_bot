@@ -1,6 +1,7 @@
 import numpy as np
 from MLP import MLP
 import time as t
+import matplotlib.pyplot as plt
 
 class bot():
     def __init__(self, bot_player_idx):
@@ -10,6 +11,7 @@ class bot():
         self.train_b_wins = 0
         self.is_player = bot_player_idx # 1 coresponds to being white player, change to -1 for black
         self.exploration_const = 3 # is used for MCTS algorithm, specificaly the UCB1 function. larger values seem to make the tree search slower but more acurate it seems
+        self.train_acuracy = np.array([0])
     
     def save_brains(self):
         for i in range(self.brain.layers):
@@ -49,15 +51,15 @@ class bot():
                         if found_opponent and 0 <= nr < self.BOARD_SIZE and 0 <= nc < self.BOARD_SIZE and board[nr][nc] == player:
                             moves = np.concat((moves,np.array([[r,c]])),axis=0)
                             break
-            moves = moves[1:]
+            #moves = moves[1:]
             
             scores = np.array(moves,dtype=np.ndarray) # probably a better way of doing this like incorporating it into the main loop
             
-            for i in range(len(moves)):
+            for i in range(1,len(moves)):
                 temp_board = np.array(board)
                 self.make_move(temp_board, player, moves[i][0], moves[i][1]) # fixed the probelm of all the temp_boards being the same, the net eval has some other issue here > problem was with matrix decleration in the MLP has been fixed now
                 #scores[i] = np.sum(temp_board.flatten())
-                scores[i] = self.brain.propigate_withought_softmax(temp_board.flatten())
+                scores[i] = self.brain.propigate_withought_softmax(temp_board.flatten())[1*(player<0)]
 
             return moves[np.argmax(scores.transpose() * player)] # the *player bit is to acount for the negative values coresponding to black
     
@@ -88,7 +90,7 @@ class bot():
 
             return move_nodes[np.argmax(scores)].node_board
 
-    def play_training_game(self): # does not currently work for some reason
+    def play_training_game(self,index): # does not currently work for some reason
         #board = self.create_board()
         player_idx = -1
         #game = [np.array(board)]
@@ -107,33 +109,32 @@ class bot():
                 continue
 
             # make moves
-            if True:
-                if np.random.randint(0,5) < 5: # the partialy random action is to alow the bot to see more game posibilities in training
-                    move = moves[np.random.randint(0,len(moves))]
-                else:
-                    move = self.evaluate_moves(np.copy(game[i]), player_idx, "neural_net")
-
-                board = np.copy(game[i])
-                self.make_move(board, player_idx,move[0],move[1])
-                game[i+1] = np.copy(board)
-                
+            if np.random.randint(0,5) < 2: # the partialy random action is to alow the bot to see more game posibilities in training
+                move = moves[np.random.randint(0,len(moves))]
             else:
-                game[i+1] = self.evaluate_moves(game[i], player_idx, "MCTS_neural_net")
+                move = self.evaluate_moves(np.copy(game[i]), player_idx, "neural_net")
+
+            board = np.copy(game[i])
+            self.make_move(board, player_idx,move[0],move[1])
+            game[i+1] = np.copy(board)
 
             # change player
             player_idx = -player_idx
 
-            #game.append(np.array(board))
             i += 1
         
-        #game = game[3:]
-        winner = max(min(np.sum(np.copy(game[i]).flatten()),0.5),-0.5) + 0.5 # must change later to be probability of white winning, see MCTS play_tree_game() function
+        winner = 1*(np.sum(np.copy(game[i]).flatten())>0)
 
         self.train_w_wins += winner
         self.train_b_wins += 1-winner
-        #for turn in game:
-        for n in range(i):
-            self.brain.back_propigate_once_cross_entropy_Adam(np.copy(game[n]).flatten(),[winner, 1-winner])
+
+        bot_answers = 0
+        for n in range(3, i):
+            #self.brain.back_propigate_once_cross_entropy_Adam(np.copy(game[n]).flatten(),[winner, 1-winner])
+            bot_answers += 1*(np.argmax(self.brain.neurons[self.brain.layers]) == (1-winner))
+        
+        self.train_acuracy[index] = bot_answers/(i-3)
+
 
     # monte carlo tree search
 
@@ -402,9 +403,9 @@ np.random.seed(1000)
 
 test = bot(1) # initalise bot
 
-train_bot = False # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
+train_bot = True # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
 retrain_bot = False
-train_MCTS_mode = True
+train_MCTS_mode = False
 if train_bot: # probably add something to cut out files that aren't needed
     if not retrain_bot:
         test.read_brains()
@@ -417,9 +418,11 @@ if train_bot: # probably add something to cut out files that aren't needed
         print()
 
     else:
+        train_iters = 300
+        test.train_acuracy = np.zeros(train_iters)
         start = t.time()
-        for i in range(300): # trains bot
-            test.play_training_game()
+        for i in range(train_iters): # trains bot
+            test.play_training_game(i)
         end = t.time()
         print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
         print(test.train_w_wins/(test.train_w_wins+test.train_b_wins))
@@ -427,11 +430,14 @@ if train_bot: # probably add something to cut out files that aren't needed
         print(test.train_b_wins)
         print()
 
-    test.save_brains()
+    #test.save_brains()
 else:
     test.read_brains()
 
-if 1 == 1:
+plt.plot(test.train_acuracy)
+plt.show()
+
+if 0 == 1:
     sim_modes = ["neural_net", "play_random_game"]
 
     start = t.time()
@@ -451,4 +457,4 @@ if 1 == 1:
     print(len(network))
     print(end - start)
 
-test.main()
+#test.main()
