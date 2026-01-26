@@ -130,7 +130,7 @@ class bot():
         self.train_w_wins += winner
         self.train_b_wins += 1-winner
 
-        turns_back = 45
+        turns_back = 30
         for n in range((i-turns_back)*(i>turns_back), i):
             # [0.5,0.5]*(1- n/turns_back) + [winner, 1-winner]*(n/turns_back) idea is to make it more certain of its predictions the later in the game the turn is
             interpolation_const = 1 - n/i
@@ -441,7 +441,7 @@ class bot():
         else:
             print("It's a tie!")
 
-np.random.seed(1000)
+np.random.seed(300)
 
 test = bot(1) # initalise bot
 
@@ -475,7 +475,7 @@ if train_bot: # probably add something to cut out files that aren't needed
 else:
     test.read_brains()
 
-# testing, last test result was an over all 68.4% acuracy
+# testing, managed to get an over all 68.4% acuracy but its varying betwene that and about 65%
 test_iters = 10000
 test.test_acuracy = np.zeros(test_iters)
 prediction_dist = np.zeros(test_iters)
