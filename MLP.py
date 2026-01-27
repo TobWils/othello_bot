@@ -30,13 +30,9 @@ class MLP():
             if i+1 == hidden_layers:
                 m = end_layer
             else:
-                #m = int(input('enter neurons in hidden layer ' + str(i+1) + ': '))
                 m = layer_sizes[i] # alowes for the net shape to be given at net decleration, must give an array of size = hidden_layers - 1
             self.hidden_layers[i] = np.multiply(np.random.rand(m,n),5)-2.5
             self.biases[i] = np.multiply(np.random.rand(m),0.05)-0.025
-            #if i == 0 or i == 1: # do not do this again it completely wrecks the nets eval capability
-            #    self.hidden_layers[i] = np.ones((m,n))
-            #    self.biases[i] = np.random.rand(m)*100 - 200
             self.neurons[i+1]: np.ndarray = [0 for i in range(m)]
             self.num_neurons[i+1]: int = m
             self.total += m
@@ -48,6 +44,8 @@ class MLP():
         self.back_prop_range = range(self.layers-1,-1,-1)
 
         #self.GELU_const = np.sqrt(8/np.pi) to three sig fig is just 1.6
+
+    # for reading and writing data to the networks parameter values so you can save and then load a network
 
     def read_matrix(self,n: int,location: str):
         self.hidden_layers[n] = pd.read_csv(location, header=None, dtype=np.float64).to_numpy()
@@ -68,6 +66,8 @@ class MLP():
 
     def wright_bias(self,n: int,location: str):
         pd.DataFrame(self.biases[n]).to_csv(location, index=False, header=False)
+
+    # a bunch of diferent math functions and their derivatives, primarily acivation functions that are used though im yet to use softmax as an activation function
 
     def ReLU(self,a: np.ndarray,layer):
         if layer != self.layers - 1:
@@ -103,11 +103,16 @@ class MLP():
         e_x = np.exp(x - np.max(x))
         return e_x / np.sum(e_x, axis=0)
 
+    # im not too sure at the moment what derive actualy does but its at the core of my backprop algorithm so best not to touch it for now if you dont want to break something
     def derive(self,v,M,z,n):
         O = np.zeros(n)
         for k in range(n):
             O[k] = np.sum(np.prod(np.array([v,np.transpose(M)[k],self.dGELU(z)]),axis=0))
         return O
+
+    # the diferent ways to propigare values through the network but sadly im not too sure how much of the following is functional code, including the back propigation functions
+    #  the "# not been updated for GELU" refers to how i have changed the derive function along with most of the activation functions so some of the back propigation code doesnt work
+    #  the reason GELU was referenced is because i was updating the network to use GELU over the other activation functions when i made this change
 
     def propigate(self,v_in: np.ndarray):# not been updated for GELU
         v_out: np.ndarray = np.copy(v_in)
@@ -139,6 +144,11 @@ class MLP():
                 v_out: np.ndarray = self.GELU(self.neurons[i+1])
         
         return v_out
+
+    # the actual back propigation functions that i have coded
+    #  as i moved to using better optimisers i started writing multiple functions for this
+    #  i ended up with old and mostly out of date functions from the earlier versions of the network code
+    #  that i never got around to fixing, my advice is to not call them at all mostly the ones taged "# not been updated for GELU"
 
     def back_propigate_epochs(self,epochs,len_epoch, start_idx):# not been updated for GELU
         # not been updated for layer dependent ReLU
@@ -337,7 +347,7 @@ class MLP():
             self.hidden_layers[i] -= change[::,:self.num_neurons[i]]
             self.biases[i] -= np.transpose(change[::,self.num_neurons[i]:])[0]
 
-    def back_propigate_once_cross_entropy_Adam(self, Input, Output):# not been updated for GELU
+    def back_propigate_once_cross_entropy_Adam(self, Input, Output):# on earlier versions it seems i updated this and forgot to remove the tag
         change_array = [np.zeros((self.num_neurons[i+1],self.num_neurons[i]+1)) for i in range(self.layers)]
 
         beta_1 = 0.85
