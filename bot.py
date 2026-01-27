@@ -130,7 +130,7 @@ class bot():
         self.train_w_wins += winner
         self.train_b_wins += 1-winner
 
-        turns_back = 30
+        turns_back = 45
         for n in range((i-turns_back)*(i>turns_back), i):
             # [0.5,0.5]*(1- n/turns_back) + [winner, 1-winner]*(n/turns_back) idea is to make it more certain of its predictions the later in the game the turn is
             interpolation_const = 1 - n/i
@@ -441,12 +441,12 @@ class bot():
         else:
             print("It's a tie!")
 
-np.random.seed(300)
+np.random.seed(400)
 
 test = bot(1) # initalise bot
 
 train_bot = True # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
-retrain_bot = False
+retrain_bot = True
 train_MCTS_mode = False
 if train_bot: # probably add something to cut out files that aren't needed
     if not retrain_bot:
@@ -460,7 +460,7 @@ if train_bot: # probably add something to cut out files that aren't needed
         print()
 
     else:
-        train_iters = 3000
+        train_iters = 30000 # should take about 5 hours so let it run in the background for a bit
         start = t.time()
         for i in range(train_iters): # trains bot
             test.play_training_game()
