@@ -4,6 +4,7 @@ use the .new_venv rather than the regular .venv as .venv is old, isent up to dat
 
 requirements file should be good now
 
+
 --ISTRUCTIONS ON HOW TO PLAY THE BOT--
 
 if you want to play the bot use the play_bot.py python file it should work and start a game
@@ -24,13 +25,20 @@ it has various variables that are intended to be changed to quickly get the bot 
 
 the first 3 of these you will encounter are on lines 10, 11 and 12.
 they are:
+
 10 - train_bot # whether or not to train the bot, if set to false it will read the weights into the bot by defult
+
 11 - retrain_bot # whether to generate new random parameters, seed values are set in most programes for repeatability however
+
 12 - train_MCTS_mode # this one is complicated but it will basicaly run an MCTS for a while to get decent evals of board positions and then train the net on those results, problem is that when you do this the resulting networks dont actualy play very well at the moment so is set to False for now
 
+
 there are 2 further main parameters that are used for training and testing:
+
 25 - train_iters # how many trainning games the bot should train on, if set to 0 there will be a divide by 0 error so istead use train_bot = False
+
 41 - test_iters # how many testing games the bot should be evaluated on, at about 10,000 it takes about 75 seconds ish
+
 
 there are more parameters in the code that dont have names but can be changed to get diferent results depending on what your looking at or for like on line 56 theres an "if 1 == 0:" statement that exists to give an easy choice betwene kernel modes for smoothing the test results so they are actualy readable and on line 8 where ive set the bot to play as white by defult
 
