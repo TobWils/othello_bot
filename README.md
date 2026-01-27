@@ -5,6 +5,7 @@ use the .new_venv rather than the regular .venv as .venv is old, isent up to dat
 requirements file should be good now
 
 --ISTRUCTIONS ON HOW TO PLAY THE BOT--
+
 if you want to play the bot use the play_bot.py python file it should work and start a game
 
 in othello black goes first not white and the bot playes as white by defult
@@ -17,6 +18,7 @@ white is represented by O on the board
 
 
 --ISTRUCTIONS FOR TESTING AND TRAINING THE BOT--
+
 the test_and_train_bot.py file is the main python file for this.
 it has various variables that are intended to be changed to quickly get the bot to do diferent things while testing and training.
 
