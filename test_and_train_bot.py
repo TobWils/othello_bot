@@ -25,7 +25,7 @@ if train_bot: # probably add something to cut out files that aren't needed
         train_iters = 30000 # should take about 5 hours so let it run in the background for a bit
         start = t.time()
         for i in range(train_iters): # trains bot
-            test.play_training_game()
+            test.play_training_game(45)
         end = t.time()
         print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
         print(test.train_w_wins/(test.train_w_wins+test.train_b_wins))

@@ -91,7 +91,7 @@ class bot():
 
             return move_nodes[np.argmax(scores)].node_board
 
-    def play_training_game(self): # should be fixed, though i may have brocken something else to do with the evaluate moves function in the prosses
+    def play_training_game(self, turns_back): # should be fixed, though i may have brocken something else to do with the evaluate moves function in the prosses
         #board = self.create_board()
         player_idx = -1
         #game = [np.array(board)]
@@ -129,7 +129,6 @@ class bot():
         self.train_w_wins += winner
         self.train_b_wins += 1-winner
 
-        turns_back = 45
         for n in range((i-turns_back)*(i>turns_back), i):
             # [0.5,0.5]*(1- n/turns_back) + [winner, 1-winner]*(n/turns_back) idea is to make it more certain of its predictions the later in the game the turn is
             interpolation_const = 1 - n/i
