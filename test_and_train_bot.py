@@ -3,12 +3,12 @@ import numpy as np
 import time as t
 import matplotlib.pyplot as plt
 
-np.random.seed(400)
+np.random.seed(500)
 
 test = bot(1) # initalise bot
 
-train_bot = False # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
-retrain_bot = False
+train_bot = True # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
+retrain_bot = True
 train_MCTS_mode = False
 if train_bot: # probably add something to cut out files that aren't needed
     if not retrain_bot:
@@ -22,10 +22,10 @@ if train_bot: # probably add something to cut out files that aren't needed
         print()
 
     else:
-        train_iters = 30000 # should take about 5 hours so let it run in the background for a bit
+        train_iters = 30000 # at 30,000 should take about 1 hour so let it run in the background for a bit
         start = t.time()
         for i in range(train_iters): # trains bot
-            test.play_training_game(45)
+            test.play_training_game(np.random.randint(1,46))
         end = t.time()
         print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
         print(test.train_w_wins/(test.train_w_wins+test.train_b_wins))
@@ -38,7 +38,7 @@ else:
     test.read_brains()
 
 # testing, managed to get an over all 68.4% acuracy but its varying betwene that and about 65%
-test_iters = 1000
+test_iters = 10000
 test.test_acuracy = np.zeros(test_iters)
 prediction_dist = np.zeros(test_iters)
 start = t.time()
@@ -52,7 +52,7 @@ print(f"average testing acuracy was: {str(np.round(np.average(test.test_acuracy)
 print()
 
 
-kernel_size = int(test_iters/60)
+kernel_size = int(test_iters/20)
 if 1 == 0:
     smoothing_kernel = np.arange(kernel_size)
     for i in range(int(kernel_size/2),kernel_size):
