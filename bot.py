@@ -10,7 +10,8 @@ class bot():
         self.train_b_wins = 0
         self.is_player = bot_player_idx # 1 coresponds to being white player, change to -1 for black
         self.exploration_const = 3 # is used for MCTS algorithm, specificaly the UCB1 function. larger values seem to make the tree search slower but more acurate it seems
-        self.test_acuracy = np.array([0])
+        self.test_correct_predict = np.zeros(60)
+        self.test_num_predict = np.zeros(60)
     
     def save_brains(self):
         for i in range(self.brain.layers):
@@ -91,6 +92,20 @@ class bot():
 
             return move_nodes[np.argmax(scores)].node_board
 
+    def testing_score_board(self, board, player, eval_mode:str): # your efectively recalculating what moves are posible here so could optimise further in the training game code
+        if eval_mode == "neural_net":
+            return self.brain.propigate(board.flatten())
+
+        elif eval_mode == "MCTS_neural_net":
+            tree = self.MCTS(board, player, 5*8*2*24, "neural_net")
+            return tree[0].total_val
+        
+        elif eval_mode == "MCTS_random":
+            tree = self.MCTS(board, player, 192, "play_random_game")
+            return tree[0].total_val
+
+
+
     def play_training_game(self, turns_back): # should be fixed, though i may have brocken something else to do with the evaluate moves function in the prosses
         #board = self.create_board()
         player_idx = -1
@@ -132,10 +147,12 @@ class bot():
         for n in range((i-turns_back)*(i>turns_back), i):
             # [0.5,0.5]*(1- n/turns_back) + [winner, 1-winner]*(n/turns_back) idea is to make it more certain of its predictions the later in the game the turn is
             interpolation_const = 1 - n/i
-            self.brain.back_propigate_once_cross_entropy_Adam(game[n].flatten(),[0.5*interpolation_const + winner*(1-interpolation_const), 0.5*interpolation_const + (1-winner)*(1-interpolation_const)])
+            outcome = 0.5*interpolation_const + winner*(1-interpolation_const)
+            self.brain.back_propigate_once_cross_entropy_Adam(game[n].flatten(),[outcome, 1-outcome])
 
-    def play_testing_game(self,index, turns_back): # should be fixed, though i may have brocken something else to do with the evaluate moves function in the prosses
+    def play_testing_game(self, Eval_mode, rand_limit): # should be fixed, though i may have brocken something else to do with the evaluate moves function in the prosses
         #board = self.create_board()
+        turns_back = 60
         player_idx = -1
         #game = [np.array(board)]
         game = np.zeros((61,8,8), dtype=np.float64)
@@ -153,10 +170,10 @@ class bot():
                 continue
 
             # make moves
-            if np.random.randint(0,5) < 4: # the partialy random action is to alow the bot to see more game posibilities in training
+            if np.random.randint(0,5) < rand_limit: # the partialy random action is to alow the bot to see more game posibilities in training
                 move = moves[np.random.randint(0,len(moves))]
             else:
-                move = self.evaluate_moves(np.copy(game[i]), player_idx, "neural_net")
+                move = self.evaluate_moves(np.copy(game[i]), player_idx, Eval_mode)
 
             board = np.copy(game[i])
             self.make_move(board, player_idx,move[0],move[1])
@@ -169,11 +186,12 @@ class bot():
         
         winner = 1*(np.sum(game[i].flatten())>0)
 
-        bot_answers = 0
+        player_idx = -1**((i-turns_back)*(i>turns_back) + 1)
         for n in range((i-turns_back)*(i>turns_back),i):
-            bot_answers += 1*(np.argmax(self.brain.propigate(game[n].flatten())) == (1-winner))
-        
-        self.test_acuracy[index] = bot_answers/(turns_back + (i - turns_back)*(i<turns_back))
+            evaluation = self.testing_score_board(game[n], player_idx, Eval_mode)
+            self.test_correct_predict[i-1 - n] += 1*(np.argmax(evaluation) == (1-winner))
+            self.test_num_predict[i-1 - n] += 1
+            player_idx = -player_idx
 
 
     # monte carlo tree search

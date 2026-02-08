@@ -7,7 +7,7 @@ np.random.seed(500)
 
 test = bot(1) # initalise bot
 
-train_bot = True # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
+train_bot = False # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
 retrain_bot = True
 train_MCTS_mode = False
 if train_bot: # probably add something to cut out files that aren't needed
@@ -22,10 +22,11 @@ if train_bot: # probably add something to cut out files that aren't needed
         print()
 
     else:
-        train_iters = 30000 # at 30,000 should take about 1 hour so let it run in the background for a bit
+        train_iters = 150000 # at 30,000 should take about 1 hour so let it run in the background for a bit
         start = t.time()
         for i in range(train_iters): # trains bot
-            test.play_training_game(np.random.randint(1,46))
+            #test.play_training_game(np.random.randint(1,46))
+            test.play_training_game(1)
         end = t.time()
         print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
         print(test.train_w_wins/(test.train_w_wins+test.train_b_wins))
@@ -33,59 +34,58 @@ if train_bot: # probably add something to cut out files that aren't needed
         print(test.train_b_wins)
         print()
 
-    test.save_brains()
+    #test.save_brains()
 else:
     test.read_brains()
 
-# testing, managed to get an over all 68.4% acuracy but its varying betwene that and about 65%
+    if 1 == 1:
+        scaling_test_iters = 15
+        scaling_test_start = 0
+        scaling_test_stop = 15000
+        scaling_test_lengths = np.linspace(scaling_test_start,scaling_test_stop,scaling_test_iters, dtype=np.int64)
+        scaling_test_times = np.zeros(scaling_test_iters)
+
+        for i in range(scaling_test_iters):
+            scaling_test_bot = bot(1)
+            start = t.time()
+            for ii in range(scaling_test_lengths[i]):
+                scaling_test_bot.play_training_game(1)
+            end = t.time()
+            scaling_test_times[i] = end - start
+            print(f"completed scaling test itr:{i} | it lasted for {scaling_test_lengths[i]} iterations")
+        
+        plt.plot(scaling_test_times)
+        plt.show()
+        print()
+
+# testing
 test_iters = 10000
-test.test_acuracy = np.zeros(test_iters)
-prediction_dist = np.zeros(test_iters)
+test_modes = ["neural_net", "MCTS_neural_net", "MCTS_random"]
 start = t.time()
 for i in range(test_iters):
-    test.play_testing_game(i, int(59*(i/test_iters) + 1))
-    prediction_dist[i] = int(59*(i/test_iters) + 1)
+    test.play_testing_game(test_modes[0],5)
 end = t.time()
+test_acuracy = test.test_correct_predict/test.test_num_predict
+total_acuracy = np.sum(test.test_correct_predict)/np.sum(test.test_num_predict)
 
 print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
-print(f"average testing acuracy was: {str(np.round(np.average(test.test_acuracy),4)*100)[:5]}% \naverage test speed was: {(end-start)/test_iters} sec/itr")
+print(f"average testing acuracy was: {str(np.round(total_acuracy,4)*100)[:5]}% \naverage test speed was: {(end-start)/test_iters} sec/itr")
 print()
 
-
-kernel_size = int(test_iters/20)
-if 1 == 0:
-    smoothing_kernel = np.arange(kernel_size)
-    for i in range(int(kernel_size/2),kernel_size):
-        smoothing_kernel[i] = kernel_size - i
-
-    smoothing_kernel = smoothing_kernel/np.sum(smoothing_kernel)
-else:
-    smoothing_kernel = np.ones(kernel_size)/kernel_size
-
-smoothed_acuracy = np.convolve(test.test_acuracy,smoothing_kernel,'valid')
-smoothed_distances = np.convolve(prediction_dist,smoothing_kernel,'valid')
-
-averaged_acuracy = np.zeros(59)
-for i in range(test_iters):
-    averaged_acuracy[int(prediction_dist[i]-1)] += test.test_acuracy[i]
-
-averaged_acuracy = averaged_acuracy*59/test_iters
-
 if train_bot:
-    plt.subplot(221)
-    plt.plot(smoothed_distances,smoothed_acuracy)
-    plt.subplot(223)
-    plt.plot(averaged_acuracy)
-    plt.subplot(122)
-    plt.plot(test.brain.loss)
+    fig, (ax1, ax2)  = plt.subplots(1,2)
+    ax1.set_ylim(0,1)
+    ax1.plot(0.5*np.ones(60))
+    ax1.plot(test_acuracy)
+    ax2.plot(test.brain.loss)
 else:
-    plt.subplot(211)
-    plt.plot(smoothed_distances,smoothed_acuracy)
-    plt.subplot(212)
-    plt.plot(averaged_acuracy)
+    fig, ax1 = plt.subplots(1, 1)
+    ax1.set_ylim(0,1)
+    ax1.plot(0.5*np.ones(60))
+    ax1.plot(test_acuracy)
 plt.show()
 
-if 0 == 1:
+if 1 == 0:
     sim_modes = ["neural_net", "play_random_game"]
 
     start = t.time()
@@ -94,7 +94,7 @@ if 0 == 1:
     # the MCTS runs in about 0.58 - 0.61 seconds using a 4 layer [16,12,4] neural net to simulate game outcomes and covers 9346 board states with 4*384 iterations
     # the MCTS runs in about 10.25 - 10.5 seconds using random decision making to simulate game outcomes and covers 9308 board states with 4*384 iterations
 
-    for i in range(min(len(network),5)):
+    for i in range(min(len(network),32)):
         print(network[i].node_board)
         print(network[i].node_player)
         print(f"estimated (W win | B win): {network[i].total_val/network[i].number_visits}")
