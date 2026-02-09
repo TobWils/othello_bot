@@ -3,7 +3,7 @@ import numpy as np
 import time as t
 import matplotlib.pyplot as plt
 
-np.random.seed(500)
+np.random.seed(600)
 
 test = bot(1) # initalise bot
 
@@ -22,7 +22,7 @@ if train_bot: # probably add something to cut out files that aren't needed
         print()
 
     else:
-        train_iters = 12960 # at 30,000 should take about 1 hour so let it run in the background for a bit
+        train_iters = 30000 # at 30,000 should take about 1 hour so let it run in the background for a bit
         start = t.time()
         for i in range(int(train_iters/2)): # trains bot
             test.play_training_game(np.random.randint(1,55))
