@@ -4,7 +4,7 @@ import time as t
 
 class bot():
     def __init__(self, bot_player_idx):
-        self.brain = MLP(64,2,"n",3, [96,96,96,96,96,96,96])
+        self.brain = MLP(65,2,"n",3, [96,96,96,96,96,96,96])
         self.BOARD_SIZE = 8
         self.train_w_wins = 0
         self.train_b_wins = 0
@@ -27,8 +27,8 @@ class bot():
             self.brain.read_bias(i, bias_location)
             self.brain.read_matrix(i, weight_location)
 
-    def evaluate_board(self,board):
-        return self.brain.propigate(board.flatten())
+    def evaluate_board(self,board,player):
+        return self.brain.propigate(np.append([player],board))
 
     def evaluate_moves(self, board, player, eval_mode:str): # your efectively recalculating what moves are posible here so could optimise further in the training game code
         if eval_mode == "neural_net":
@@ -61,7 +61,7 @@ class bot():
                 temp_board = np.copy(board)
                 self.make_move(temp_board, player, moves[i][0], moves[i][1]) # fixed the probelm of all the temp_boards being the same, the net eval has some other issue here > problem was with matrix decleration in the MLP has been fixed now
                 #scores[i] = np.sum(temp_board.flatten())
-                scores[i-1] = self.brain.propigate(temp_board.flatten())[1*(player<0)]
+                scores[i-1] = self.brain.propigate(np.append([-player],temp_board))[1*(player<0)]
 
             return moves[np.argmax(scores)+1] # the *player bit is to acount for the negative values coresponding to black
     
@@ -94,7 +94,7 @@ class bot():
 
     def testing_score_board(self, board, player, eval_mode:str): # your efectively recalculating what moves are posible here so could optimise further in the training game code
         if eval_mode == "neural_net":
-            return self.brain.propigate(board.flatten())
+            return self.brain.propigate(np.append([player],board))
 
         elif eval_mode == "MCTS_neural_net":
             tree = self.MCTS(board, player, 5*8*2*24, "neural_net")
@@ -107,10 +107,9 @@ class bot():
 
 
     def play_training_game(self, turns_back): # should be fixed, though i may have brocken something else to do with the evaluate moves function in the prosses
-        #board = self.create_board()
         player_idx = -1
-        #game = [np.array(board)]
         game = np.zeros((61,8,8), dtype=np.float64)
+        curent_player = np.zeros(61,dtype=np.float64)
         game[0] = self.create_board()
         i = 0
 
@@ -125,13 +124,15 @@ class bot():
                 continue
 
             # make moves
-            if np.random.randint(0,5) < 4: # the partialy random action is to alow the bot to see more game posibilities in training
-                move = moves[np.random.randint(0,len(moves))]
-            else:
-                move = self.evaluate_moves(np.copy(game[i]), player_idx, "neural_net")
+            move = moves[np.random.randint(0,len(moves))]
+            #if np.random.randint(0,5) < 3: # the partialy random action is to alow the bot to see more game posibilities in training
+            #    move = moves[np.random.randint(0,len(moves))]
+            #else:
+            #    move = self.evaluate_moves(np.copy(game[i]), player_idx, "neural_net")
 
             board = np.copy(game[i])
             self.make_move(board, player_idx,move[0],move[1])
+            curent_player[i] = player_idx
             game[i+1] = np.copy(board)
 
             # change player
@@ -148,14 +149,13 @@ class bot():
             # [0.5,0.5]*(1- n/turns_back) + [winner, 1-winner]*(n/turns_back) idea is to make it more certain of its predictions the later in the game the turn is
             interpolation_const = 1 - n/i
             outcome = 0.5*interpolation_const + winner*(1-interpolation_const)
-            self.brain.back_propigate_once_cross_entropy_Adam(game[n].flatten(),[outcome, 1-outcome])
+            self.brain.back_propigate_once_cross_entropy_Adam(np.append([curent_player[n]],game[n]),[outcome, 1-outcome])
 
     def play_testing_game(self, Eval_mode, rand_limit): # should be fixed, though i may have brocken something else to do with the evaluate moves function in the prosses
-        #board = self.create_board()
         turns_back = 60
         player_idx = -1
-        #game = [np.array(board)]
         game = np.zeros((61,8,8), dtype=np.float64)
+        curent_player = np.zeros(61,dtype=np.float64)
         game[0] = self.create_board()
         i = 0
 
@@ -177,6 +177,7 @@ class bot():
 
             board = np.copy(game[i])
             self.make_move(board, player_idx,move[0],move[1])
+            curent_player[i] = player_idx
             game[i+1] = np.copy(board)
 
             # change player
@@ -186,12 +187,10 @@ class bot():
         
         winner = 1*(np.sum(game[i].flatten())>0)
 
-        player_idx = -1**((i-turns_back)*(i>turns_back) + 1)
         for n in range((i-turns_back)*(i>turns_back),i):
-            evaluation = self.testing_score_board(game[n], player_idx, Eval_mode)
+            evaluation = self.testing_score_board(game[n], curent_player[n], Eval_mode)
             self.test_correct_predict[i-1 - n] += 1*(np.argmax(evaluation) == (1-winner))
             self.test_num_predict[i-1 - n] += 1
-            player_idx = -player_idx
 
 
     # monte carlo tree search
@@ -304,7 +303,7 @@ class bot():
                     
                 #simulation
                 if simulation_mode == "neural_net":
-                    nodes[sim_node_idx].total_val = self.evaluate_board(nodes[sim_node_idx].node_board) # evaluation using neural nets to be quick, a more expensive sim could be done maybey repurpouse the play game tree function for this
+                    nodes[sim_node_idx].total_val = self.evaluate_board(nodes[sim_node_idx].node_board, current_player) # evaluation using neural nets to be quick, a more expensive sim could be done maybey repurpouse the play game tree function for this
                 elif simulation_mode == "play_random_game":
                     nodes[sim_node_idx].total_val = self.play_tree_game(nodes[sim_node_idx].node_board, current_player) # evaluation using random game, should be relativly fast and is more acurate
                 
@@ -328,7 +327,7 @@ class bot():
             if Node.number_visits > 5:
                 #print(f"prob:{Node.total_val/Node.number_visits}|vals:{Node.total_val,Node.number_visits}")
                 #for _ in range(Node.number_visits): # max(int(100*Node.number_visits/tree_iters),1)
-                self.brain.back_propigate_once_cross_entropy_Adam(Node.node_board.flatten(), Node.total_val/Node.number_visits)
+                self.brain.back_propigate_once_cross_entropy_Adam(np.append([Node.node_player],Node.node_board), Node.total_val/Node.number_visits)
             
             t2 = t.time()
             if t2 - t1 > 1800 and save_as_go: # saves progress every 30 min roughly (1800 sec)
@@ -442,7 +441,7 @@ class bot():
                 self.make_move(board, player_idx, row, col)
 
             elif player_idx == self.is_player:
-                board = self.evaluate_moves(board, self.is_player, "MCTS_neural_net")
+                board = self.evaluate_moves(np.append([self.is_player],board), self.is_player, "MCTS_neural_net")
 
             #current_player = 'O' if current_player == 'X' else 'X'
             player_idx = -player_idx

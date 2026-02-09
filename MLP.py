@@ -352,7 +352,7 @@ class MLP():
 
         beta_1 = 0.85
         beta_2 = 0.995
-        alpha = 0.001
+        alpha = 0.00001
 
         self.output = self.propigate(np.copy(Input))
 
