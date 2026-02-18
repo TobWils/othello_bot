@@ -83,12 +83,15 @@ class bot():
         elif eval_mode == "MCTS_random":
             tree = self.MCTS(board, player, 192, "play_random_game")
 
-            move_nodes = [tree[tree[0].child_node_idxs[i]] for i in range(len(tree[0].child_node_idxs))]
+            #move_nodes = [tree[tree[0].child_node_idxs[i]] for i in range(len(tree[0].child_node_idxs))]
+            move_nodes = [tree[idx] for idx in tree[0].child_node_idxs]
 
             if player == 1:
-                scores = [move_nodes[i].total_val/move_nodes[i].number_visits for i in range(len(move_nodes))]
+                #scores = [move_nodes[i].total_val[0]/move_nodes[i].number_visits for i in range(len(move_nodes))]
+                scores = [idx.total_val[0]/idx.number_visits for idx in move_nodes]
             else:
-                scores = [1 - move_nodes[i].total_val/move_nodes[i].number_visits for i in range(len(move_nodes))]
+                #scores = [move_nodes[i].total_val[1]/move_nodes[i].number_visits for i in range(len(move_nodes))]
+                scores = [idx.total_val[1]/idx.number_visits for idx in move_nodes]
 
             return move_nodes[np.argmax(scores)].node_board
 
@@ -124,11 +127,11 @@ class bot():
                 continue
 
             # make moves
-            move = moves[np.random.randint(0,len(moves))]
-            #if np.random.randint(0,5) < 3: # the partialy random action is to alow the bot to see more game posibilities in training
-            #    move = moves[np.random.randint(0,len(moves))]
-            #else:
-            #    move = self.evaluate_moves(np.copy(game[i]), player_idx, "neural_net")
+            #move = moves[np.random.randint(0,len(moves))]
+            if np.random.randint(0,5) < 1: # the partialy random action is to alow the bot to see more game posibilities in training
+                move = moves[np.random.randint(0,len(moves))]
+            else:
+                move = self.evaluate_moves(np.copy(game[i]), player_idx, "neural_net")
 
             board = np.copy(game[i])
             self.make_move(board, player_idx,move[0],move[1])
@@ -151,7 +154,7 @@ class bot():
             outcome = 0.5*interpolation_const + winner*(1-interpolation_const)
             self.brain.back_propigate_once_cross_entropy_Adam(np.append([curent_player[n]],game[n]),[outcome, 1-outcome])
 
-    def play_testing_game(self, Eval_mode, rand_limit): # should be fixed, though i may have brocken something else to do with the evaluate moves function in the prosses
+    def play_testing_game(self, Eval_mode, Play_mode, rand_limit): # should be fixed, though i may have brocken something else to do with the evaluate moves function in the prosses
         turns_back = 60
         player_idx = -1
         game = np.zeros((61,8,8), dtype=np.float64)
@@ -170,15 +173,20 @@ class bot():
                 continue
 
             # make moves
-            if np.random.randint(0,5) < rand_limit: # the partialy random action is to alow the bot to see more game posibilities in training
+            if np.random.random()*100 < rand_limit**((60-i)/60): # the partialy random action is to alow the bot to see more game posibilities in training
                 move = moves[np.random.randint(0,len(moves))]
+                board = np.copy(game[i])
+                self.make_move(board, player_idx,move[0],move[1])
+                curent_player[i] = player_idx
+                game[i+1] = np.copy(board)
+            elif Play_mode == "neural_net":
+                move = self.evaluate_moves(np.copy(game[i]), player_idx, Play_mode)
+                board = np.copy(game[i])
+                self.make_move(board, player_idx,move[0],move[1])
+                curent_player[i] = player_idx
+                game[i+1] = np.copy(board)
             else:
-                move = self.evaluate_moves(np.copy(game[i]), player_idx, Eval_mode)
-
-            board = np.copy(game[i])
-            self.make_move(board, player_idx,move[0],move[1])
-            curent_player[i] = player_idx
-            game[i+1] = np.copy(board)
+                game[i+1] = self.evaluate_moves(np.copy(game[i]), player_idx, Play_mode)
 
             # change player
             player_idx = -player_idx

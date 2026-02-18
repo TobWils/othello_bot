@@ -22,11 +22,11 @@ if train_bot: # probably add something to cut out files that aren't needed
         print()
 
     else:
-        train_iters = 30000 # at 30,000 should take about 1 hour so let it run in the background for a bit
+        train_iters = 300 # at 30,000 should take about 1 hour so let it run in the background for a bit
         start = t.time()
         for i in range(int(train_iters/2)): # trains bot
             test.play_training_game(np.random.randint(1,55))
-            test.play_training_game(54)
+            test.play_training_game(60)
         end = t.time()
         print(end - start) # avereages ~0.2126666021347046 seconds per game in training (100 games in 21.26666021347046 sec) with a 2 layer bot with 16 neurons in each layer
         print(test.train_w_wins/(test.train_w_wins+test.train_b_wins))
@@ -34,7 +34,7 @@ if train_bot: # probably add something to cut out files that aren't needed
         print(test.train_b_wins)
         print()
 
-    test.save_brains()
+    #test.save_brains()
 else:
     test.read_brains()
 
@@ -59,11 +59,11 @@ else:
         print()
 
 # testing
-test_iters = 5000
+test_iters = 500
 test_modes = ["neural_net", "MCTS_neural_net", "MCTS_random"]
 start = t.time()
 for i in range(test_iters):
-    test.play_testing_game(test_modes[0],5)
+    test.play_testing_game(test_modes[0], test_modes[0],15)
 end = t.time()
 test_acuracy = test.test_correct_predict/test.test_num_predict
 total_acuracy = np.sum(test.test_correct_predict)/np.sum(test.test_num_predict)
