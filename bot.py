@@ -364,6 +364,7 @@ class bot():
 
         for r in range(self.BOARD_SIZE):
             for c in range(self.BOARD_SIZE):
+                #print(board)
                 if board[r][c] != 0:
                     continue
                 for dr, dc in directions:
@@ -425,7 +426,7 @@ class bot():
                 self.print_board(board)
                 x_count, o_count = self.score(board)
                 print(f"Score → O: {o_count}, X: {x_count}")
-                print(f"{ 'X' if player_idx == -1 else 'O' }'s turn| prediction: {self.evaluate_board(board)}")
+                print(f"{ 'X' if player_idx == -1 else 'O' }'s turn| prediction: {self.evaluate_board(np.copy(board),player_idx)}")
 
 
                 print("Valid moves:", moves)
@@ -441,7 +442,7 @@ class bot():
                 self.make_move(board, player_idx, row, col)
 
             elif player_idx == self.is_player:
-                board = self.evaluate_moves(np.append([self.is_player],board), self.is_player, "MCTS_neural_net")
+                board = np.reshape(self.evaluate_moves(board, self.is_player, "MCTS_neural_net"),(8,8))
 
             #current_player = 'O' if current_player == 'X' else 'X'
             player_idx = -player_idx

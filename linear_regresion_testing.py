@@ -53,14 +53,14 @@ def play_sample_game(xdata, ydata, sample_depth): # runs a random search for the
         n += 1
 
     if n > sample_depth:
-        white_win_prob = (np.sum(board.flatten()) > 0)*1
+        white_win_prob = (np.sum(board.flatten()) > 0)*(1 - 10**(-16)) + 5*10**(-17)
         y_to_concat = np.ones((n - sample_depth,2))
-        interpols = np.linspace(0.5,0.999,n)[sample_depth:]
-        interpols = interpols[:, None]
+        #interpols = np.linspace(0.999,0.999,n)[sample_depth:]
+        #interpols = interpols[:, None]
         y_to_concat[:, 0] *= white_win_prob
         y_to_concat[:, 1] *= 1-white_win_prob  
 
-        y_to_concat = y_to_concat*interpols + 0.5*np.ones((n - sample_depth,2))*(1-interpols)
+        #y_to_concat = y_to_concat*interpols + 0.5*np.ones((n - sample_depth,2))*(1-interpols)
 
         ydata = np.concat((ydata, y_to_concat), axis = 0)
 
@@ -69,7 +69,7 @@ def play_sample_game(xdata, ydata, sample_depth): # runs a random search for the
 start = t.time()
 num_sample_games = 10000
 for _ in range(num_sample_games):
-    xdata, ydata = play_sample_game(xdata,ydata,58)
+    xdata, ydata = play_sample_game(xdata,ydata,25)
 xdata = xdata[1:]
 ydata = ydata[1:]
 end = t.time()
@@ -108,7 +108,7 @@ test_ydata = np.zeros((1,2))
 start = t.time()
 num_sample_games = 1000
 for _ in range(num_sample_games):
-    test_xdata, test_ydata = play_sample_game(test_xdata,test_ydata,58)
+    test_xdata, test_ydata = play_sample_game(test_xdata,test_ydata,5)
 test_xdata = test_xdata[1:]
 test_ydata = test_ydata[1:]
 end = t.time()
