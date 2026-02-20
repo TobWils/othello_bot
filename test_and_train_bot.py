@@ -3,11 +3,11 @@ import numpy as np
 import time as t
 import matplotlib.pyplot as plt
 
-np.random.seed(600)
+np.random.seed(700)
 
 test = bot(1) # initalise bot
 
-train_bot = True # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
+train_bot = False # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
 retrain_bot = False
 train_MCTS_mode = False
 if train_bot: # probably add something to cut out files that aren't needed
@@ -16,13 +16,13 @@ if train_bot: # probably add something to cut out files that aren't needed
 
     if train_MCTS_mode:
         start = t.time()
-        test.MCTS_train(256*256*384, "play_random_game", True)
+        test.MCTS_train(64*256*384, "neural_net", True) # "play_random_game"
         end = t.time()
         print(end - start)
         print()
 
     else:
-        train_iters = 300 # at 30,000 should take about 1 hour so let it run in the background for a bit
+        train_iters = 150000 # at 30,000 should take about 1 hour so let it run in the background for a bit
         start = t.time()
         for i in range(int(train_iters/2)): # trains bot
             test.play_training_game(np.random.randint(1,55))
@@ -34,7 +34,7 @@ if train_bot: # probably add something to cut out files that aren't needed
         print(test.train_b_wins)
         print()
 
-    #test.save_brains()
+    test.save_brains()
 else:
     test.read_brains()
 
@@ -59,11 +59,11 @@ else:
         print()
 
 # testing
-test_iters = 500
+test_iters = 5000
 test_modes = ["neural_net", "MCTS_neural_net", "MCTS_random"]
 start = t.time()
 for i in range(test_iters):
-    test.play_testing_game(test_modes[0], test_modes[0],15)
+    test.play_testing_game(test_modes[0], test_modes[0],100)
 end = t.time()
 test_acuracy = test.test_correct_predict/test.test_num_predict
 total_acuracy = np.sum(test.test_correct_predict)/np.sum(test.test_num_predict)

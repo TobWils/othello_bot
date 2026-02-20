@@ -127,11 +127,11 @@ class bot():
                 continue
 
             # make moves
-            #move = moves[np.random.randint(0,len(moves))]
-            if np.random.randint(0,5) < 1: # the partialy random action is to alow the bot to see more game posibilities in training
-                move = moves[np.random.randint(0,len(moves))]
-            else:
-                move = self.evaluate_moves(np.copy(game[i]), player_idx, "neural_net")
+            move = moves[np.random.randint(0,len(moves))]
+            #if np.random.random() < (15*0.01)**((i+1)*2/61): # the partialy random action is to alow the bot to see more game posibilities in training
+            #    move = moves[np.random.randint(0,len(moves))]
+            #else:
+            #    move = self.evaluate_moves(np.copy(game[i]), player_idx, "neural_net")
 
             board = np.copy(game[i])
             self.make_move(board, player_idx,move[0],move[1])
@@ -148,9 +148,12 @@ class bot():
         self.train_w_wins += winner
         self.train_b_wins += 1-winner
 
+        a = 0.5
+
         for n in range((i-turns_back)*(i>turns_back), i):
             # [0.5,0.5]*(1- n/turns_back) + [winner, 1-winner]*(n/turns_back) idea is to make it more certain of its predictions the later in the game the turn is
-            interpolation_const = 1 - n/i
+            interpolation_const = 1 - (n/i)*0.8
+            interpolation_const = (a**(interpolation_const) - 1)/(a - 1) # converts to an exponential form to try and do the weightings better
             outcome = 0.5*interpolation_const + winner*(1-interpolation_const)
             self.brain.back_propigate_once_cross_entropy_Adam(np.append([curent_player[n]],game[n]),[outcome, 1-outcome])
 
@@ -173,7 +176,7 @@ class bot():
                 continue
 
             # make moves
-            if np.random.random()*100 < rand_limit**((60-i)/60): # the partialy random action is to alow the bot to see more game posibilities in training
+            if np.random.random() < (rand_limit*0.01)**((i+1)*2/61): # the partialy random action is to alow the bot to see more game posibilities in training
                 move = moves[np.random.randint(0,len(moves))]
                 board = np.copy(game[i])
                 self.make_move(board, player_idx,move[0],move[1])
