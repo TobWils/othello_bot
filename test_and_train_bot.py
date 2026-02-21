@@ -7,7 +7,7 @@ np.random.seed(700)
 
 test = bot(1) # initalise bot
 
-train_bot = False # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
+train_bot = True # wether to train the bot or use precalculated weights and biases to speed up neural net testing in future
 retrain_bot = False
 train_MCTS_mode = False
 if train_bot: # probably add something to cut out files that aren't needed
@@ -22,7 +22,7 @@ if train_bot: # probably add something to cut out files that aren't needed
         print()
 
     else:
-        train_iters = 150000 # at 30,000 should take about 1 hour so let it run in the background for a bit
+        train_iters = 30000 # at 30,000 should take about 1 hour so let it run in the background for a bit
         start = t.time()
         for i in range(int(train_iters/2)): # trains bot
             test.play_training_game(np.random.randint(1,55))

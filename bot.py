@@ -148,7 +148,7 @@ class bot():
         self.train_w_wins += winner
         self.train_b_wins += 1-winner
 
-        a = 0.5
+        a = 0.5**4
 
         for n in range((i-turns_back)*(i>turns_back), i):
             # [0.5,0.5]*(1- n/turns_back) + [winner, 1-winner]*(n/turns_back) idea is to make it more certain of its predictions the later in the game the turn is
