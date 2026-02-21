@@ -1,3 +1,7 @@
+# this is an implementation of the alpha zero algorithm based on a tutorial i found implementing it with tick tack toe and conect 4
+# quite a lot of the code from there is unchanged as of now and im still finishing adapting it
+# the link to the tutorial is: https://www.youtube.com/watch?v=wuSQpLinRB4
+
 import numpy as np
 import matplotlib.pyplot as plt
 import time as t
@@ -5,6 +9,8 @@ import time as t
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+torch.manual_seed(0)
 
 
 class othello():
