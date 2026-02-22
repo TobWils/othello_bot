@@ -380,6 +380,8 @@ class AlphaZero():
 
 
 def test_model():
+    device = torch.device(torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu")
+
     Othello = othello()
 
     board = Othello.create_board()
@@ -390,9 +392,7 @@ def test_model():
 
     print(encoded_board)
 
-    tensor_board = torch.tensor(encoded_board).unsqueeze(0)
-
-    device = torch.device(torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu")
+    tensor_board = torch.tensor(encoded_board).unsqueeze(0).to(device)
 
     model = ResNet(Othello, 4, 64, device)
     model.load_state_dict(torch.load("torch_bot_save_file/model_2.pt"))
@@ -413,10 +413,14 @@ def main():
 
     args = {
         "C": 2,
-        "num_searches": 1000
+        "num_searches": 10000,
+        "temperature": 1.25,
+        "dirichlet_epsilon": 0.25,
+        "dirichlet_alpha": 0.3
     }
 
-    model = ResNet(game, 4, 64)
+    model = ResNet(game, 4, 64, "cpu")
+    model.load_state_dict(torch.load("torch_bot_save_file/model_2.pt"))
     model.eval()
 
     mcts = MCTS(game, args, model)
@@ -438,7 +442,7 @@ def main():
                 continue
         else:
             neutral_board = game.change_perspective(board, player)
-            mcts_probs = mcts.search(neutral_board, -player)
+            mcts_probs = mcts.search(neutral_board, 1)
             move = np.argmax(mcts_probs)
 
         board = game.make_move(board, player, move)
@@ -461,22 +465,31 @@ def test_alphazero():
     device = torch.device(torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu")
 
     model = ResNet(Othello, 4, 64, device)
+    model.load_state_dict(torch.load("torch_bot_save_file/model_2.pt"))
 
     optimiser = torch.optim.Adam(model.parameters(), lr = 10**(-3), weight_decay=10**(-4))
+    optimiser.load_state_dict(torch.load("torch_bot_save_file/optimiser_2.pt"))
 
     args = {
         "C": 2,
         "num_searches": 60,
         "num_iterations": 3,
-        "num_self_play_iterations": 10,
+        "num_self_play_iterations": 60,
         "num_epochs": 4,
-        "batch_size": 2,
+        "batch_size": 12,
         "temperature": 1.25,
         "dirichlet_epsilon": 0.25,
         "dirichlet_alpha": 0.3
     }
 
     alphaZero = AlphaZero(model, optimiser, Othello, args)
+
+    start = t.time()
     alphaZero.learn()
+    end = t.time()
+
+    print(f"time taken was: {end - start}")
 
 test_alphazero()
+#test_model()
+#main()
