@@ -20,5 +20,6 @@ setuptools==82.0.0
 six==1.17.0
 sympy==1.14.0
 torch==2.10.0
+tqdm==4.67.3
 typing_extensions==4.15.0
 tzdata==2025.2
