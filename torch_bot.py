@@ -357,15 +357,16 @@ class AlphaZero():
 
                 board = self.game.make_move(board, player, move)
 
-                try:
-                    value, is_terminal = self.game.get_value_and_terminated(board, player)
-                except:
-                    raise Exception(f"Invalid move {np.reshape(temperature_action_probs,(8,8))}\n{np.reshape(action_probs,(8,8))}")
+                value, is_terminal = self.game.get_value_and_terminated(board, player)
+                #try:
+                #except:
+                #    raise Exception(f"Invalid move {np.reshape(temperature_action_probs,(8,8))}\n{np.reshape(action_probs,(8,8))}")
 
                 if is_terminal:
                     return_memory = []
+                    winner = 1 if self.game.check_win(board,1) else ( -1 if self.game.check_win(board,-1) else 0)
                     for hist_neutral_board, hist_action_probs, hist_player in memory:
-                        hist_outcome = value if hist_player == player else -value
+                        hist_outcome = winner if hist_player == winner else -winner
                         return_memory.append((
                             torch.tensor(
                                 self.game.get_encoded_board(hist_neutral_board)
@@ -374,7 +375,7 @@ class AlphaZero():
                             hist_outcome
                         ))
                     
-                    print(f"avg time: {tot_time/countr}| count: {countr}| total time: {tot_time}\nvalue: {value}")
+                    print(f"avg time: {tot_time/countr}| count: {countr}| total time: {tot_time}\nvalue: {winner}")
                     print(self.game.score(board)[0] - self.game.score(board)[1])
                     return return_memory
             
@@ -625,20 +626,14 @@ def test_alphazero():
 
     device = torch.device(torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu")
 
-    model = ResNet(Othello, 4, 64, device)
-    model.load_state_dict(torch.load("torch_bot_save_file/model_2.pt"))
-
-    optimiser = torch.optim.Adam(model.parameters(), lr = 10**(-3), weight_decay=10**(-4))
-    optimiser.load_state_dict(torch.load("torch_bot_save_file/optimiser_2.pt"))
-
     args = {
-        "C": 2,
+        "C": 4,
         "num_searches": 60,
-        "num_iterations": 3,
+        "num_iterations": 9,
         "num_self_play_iterations": 10,
-        "num_epochs": 8,
-        "batch_size": 2,
-        "temperature": 1.25,
+        "num_epochs": 32,
+        "batch_size": 8,
+        "temperature": 3.25,
         "dirichlet_epsilon": 0.25,
         "dirichlet_alpha": 0.3
     }
@@ -654,6 +649,12 @@ def test_alphazero():
         "dirichlet_epsilon": 0.25,
         "dirichlet_alpha": 0.3
     }
+
+    model = ResNet(Othello, 4, 64, device)
+    #model.load_state_dict(torch.load(f"torch_bot_save_file/model_{args['num_iterations']-1}.pt"))
+
+    optimiser = torch.optim.Adam(model.parameters(), lr = 10**(-3), weight_decay=10**(-4))
+    #optimiser.load_state_dict(torch.load(f"torch_bot_save_file/optimiser_{args['num_iterations']-1}.pt"))
 
     alphaZero = AlphaZero(model, optimiser, Othello, args)
 
