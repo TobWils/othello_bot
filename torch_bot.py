@@ -292,8 +292,7 @@ class MCTS():
             
             if self.game.valid_moves(node.parent.board,1)[node.move] == 1:
 
-                value, is_terminal = self.game.get_value_and_terminated(node.parent.board, 1)
-                value = -value # as the move stored in a node is the move made by the oponent so the value should be inverted
+                value, is_terminal = self.game.get_value_and_terminated(node.board, -1)
 
                 if not is_terminal:
                     policy, value = self.model(
@@ -312,6 +311,8 @@ class MCTS():
 
                     node.expand(policy)
                 
+                value = -value # as the move stored in a node is the move made by the oponent so the value should be inverted
+
                 node.backpropigate(value)
 
         action_probs = np.zeros(self.game.ACTION_SIZE)
@@ -419,8 +420,10 @@ class AlphaZero():
 
             self.model.eval()
             start = t.time()
-            for self_play_iteration in range(self.args["num_self_play_iterations"]):
-                memory += self.self_play()
+            with torch.no_grad():
+                for self_play_iteration in range(self.args["num_self_play_iterations"]):
+                    print(f"\nitr: {self_play_iteration + 1}")
+                    memory += self.self_play()
             end = t.time()
             print(f"time taken was: {end - start} seconds")
             
@@ -628,14 +631,14 @@ def test_alphazero():
 
     args = {
         "C": 4,
-        "num_searches": 60,
-        "num_iterations": 9,
-        "num_self_play_iterations": 10,
-        "num_epochs": 32,
+        "num_searches": 240,
+        "num_iterations": 6,
+        "num_self_play_iterations": 20,
+        "num_epochs": 8,
         "batch_size": 8,
         "temperature": 3.25,
-        "dirichlet_epsilon": 0.25,
-        "dirichlet_alpha": 0.3
+        "dirichlet_epsilon": 0.35,
+        "dirichlet_alpha": 0.4
     }
 
     origonal_args = {
@@ -650,11 +653,12 @@ def test_alphazero():
         "dirichlet_alpha": 0.3
     }
 
+
     model = ResNet(Othello, 4, 64, device)
-    #model.load_state_dict(torch.load(f"torch_bot_save_file/model_{args['num_iterations']-1}.pt"))
+    model.load_state_dict(torch.load(f"torch_bot_save_file/model_{args['num_iterations']-1}.pt"))
 
     optimiser = torch.optim.Adam(model.parameters(), lr = 10**(-3), weight_decay=10**(-4))
-    #optimiser.load_state_dict(torch.load(f"torch_bot_save_file/optimiser_{args['num_iterations']-1}.pt"))
+    optimiser.load_state_dict(torch.load(f"torch_bot_save_file/optimiser_{args['num_iterations']-1}.pt"))
 
     alphaZero = AlphaZero(model, optimiser, Othello, args)
 
